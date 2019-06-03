@@ -207,6 +207,21 @@ public class DefaultJavaForkOptions extends DefaultProcessForkOptions implements
         options.setDebug(enabled);
     }
 
+    public int getPort() {
+        return options.getDebugPort();
+    }
+
+    public boolean isSuspend() {
+        return options.isDebugSuspend();
+    }
+
+    @Override
+    public void setDebugOptions(int port, boolean suspend) {
+        options.setDebug(true);
+        options.setDebugPort(port);
+        options.setDebugSuspend(suspend);
+    }
+
     @Override
     public JavaForkOptions copyTo(JavaForkOptions target) {
         super.copyTo(target);

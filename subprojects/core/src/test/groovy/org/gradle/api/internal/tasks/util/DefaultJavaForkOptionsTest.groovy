@@ -58,6 +58,8 @@ class DefaultJavaForkOptionsTest extends Specification {
         options.bootstrapClasspath.files.isEmpty()
         !options.enableAssertions
         !options.debug
+        !options.port
+        options.suspend
         options.allJvmArgs == [fileEncodingProperty(), *localeProperties()]
     }
 
@@ -335,6 +337,23 @@ class DefaultJavaForkOptionsTest extends Specification {
         then:
         options.debug
         options.jvmArgs == []
+    }
+
+    def "can set debug options"() {
+        when:
+        options.setDebugOptions(2233, true)
+
+        then:
+        options.port == 2233
+        options.suspend
+    }
+
+    def "debug is enabled when setting debug options"() {
+        when:
+        options.setDebugOptions(2233, false)
+
+        then:
+        options.debug
     }
 
     def "can set bootstrapClasspath"() {

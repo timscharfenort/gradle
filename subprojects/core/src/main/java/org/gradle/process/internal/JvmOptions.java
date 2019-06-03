@@ -36,6 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
 
 public class JvmOptions {
     private static final String XMS_PREFIX = "-Xms";
@@ -48,6 +49,8 @@ public class JvmOptions {
     public static final String USER_VARIANT_KEY = "user.variant";
     public static final String JMX_REMOTE_KEY = "com.sun.management.jmxremote";
     public static final String JAVA_IO_TMPDIR_KEY = "java.io.tmpdir";
+
+    private static final Pattern DEBUG_JVM_ARG = Pattern.compile("-agentlib:jdwp=transport=dt_socket,server=y,suspend=(y|n),address=[0-9]+");
 
     public static final Set<String> IMMUTABLE_SYSTEM_PROPERTIES = ImmutableSet.of(
         FILE_ENCODING_KEY, USER_LANGUAGE_KEY, USER_COUNTRY_KEY, USER_VARIANT_KEY, JMX_REMOTE_KEY, JAVA_IO_TMPDIR_KEY
@@ -66,6 +69,8 @@ public class JvmOptions {
     private String maxHeapSize;
     private boolean assertionsEnabled;
     private boolean debug;
+    private int debugPort;
+    private boolean debugSuspend = true;
 
     protected final Map<String, Object> immutableSystemProperties = new TreeMap<String, Object>();
 
@@ -135,8 +140,9 @@ public class JvmOptions {
         if (assertionsEnabled) {
             args.add("-ea");
         }
+
         if (debug) {
-            args.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005");
+            args.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=" + (debugSuspend ? "y" : "n")  + ",address=" + (debugPort > 0 ? debugPort : 5005));
         }
         return args;
     }
@@ -203,7 +209,7 @@ public class JvmOptions {
             } else if (extraJvmArg.toString().equals("-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005")) {
                 xrunjdwpFound = true;
                 matches.add(extraJvmArg);
-            } else if (extraJvmArg.toString().equals("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005")) {
+            } else if (DEBUG_JVM_ARG.matcher(extraJvmArg.toString()).matches()) {
                 xagentlibJdwpFound = true;
                 matches.add(extraJvmArg);
             }
@@ -308,6 +314,22 @@ public class JvmOptions {
         debug = enabled;
     }
 
+    public int getDebugPort() {
+        return this.debugPort;
+    }
+
+    public void setDebugPort(int debugPort) {
+        this.debugPort = debugPort;
+    }
+
+    public boolean isDebugSuspend() {
+        return this.debugSuspend;
+    }
+
+    public void setDebugSuspend(boolean suspend) {
+        this.debugSuspend = suspend;
+    }
+
     public void copyTo(JavaForkOptions target) {
         target.setJvmArgs(extraJvmArgs);
         target.setSystemProperties(mutableSystemProperties);
@@ -316,6 +338,7 @@ public class JvmOptions {
         target.setBootstrapClasspath(getBootstrapClasspath());
         target.setEnableAssertions(assertionsEnabled);
         target.setDebug(debug);
+        target.setDebugOptions(debugPort, debugSuspend);
         target.systemProperties(immutableSystemProperties);
     }
 
@@ -330,6 +353,8 @@ public class JvmOptions {
         }
         target.setEnableAssertions(assertionsEnabled);
         target.setDebug(debug);
+        target.setDebugPort(debugPort);
+        target.setDebugSuspend(debugSuspend);
         target.systemProperties(immutableSystemProperties);
         return target;
     }

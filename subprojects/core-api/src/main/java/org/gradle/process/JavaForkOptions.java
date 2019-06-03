@@ -226,6 +226,16 @@ public interface JavaForkOptions extends ProcessForkOptions {
     void setDebug(boolean enabled);
 
     /**
+     * Enable debugging for the process. When called, the process is started in debug mode with the specified parameters.
+     *
+     * @param port The started process will listen on this port.
+     * @param suspend Whether the process should wait for the debugger to be attached before proceeding with the execution.
+     * @since 5.6
+     */
+    @Incubating
+    void setDebugOptions(int port, boolean suspend);
+
+    /**
      * Returns the full set of arguments to use to launch the JVM for the process. This includes arguments to define
      * system properties, the minimum/maximum heap size, and the bootstrap classpath.
      *
