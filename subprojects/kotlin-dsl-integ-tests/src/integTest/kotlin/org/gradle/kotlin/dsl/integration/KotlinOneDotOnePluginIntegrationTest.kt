@@ -123,7 +123,7 @@ class KotlinOneDotOnePluginIntegrationTest : AbstractKotlinIntegrationTest() {
 
         executer.inDirectory(pluginDir)
             .withArguments("uploadArchives")
-            .expectDeprecationWarning()
+            .expectDeprecationWarnings(2) // in plugins: (1) DefaultSourceDirectorySet constructor (2) 'compile' configuration
             .run()
 
         return pluginRepositoryDir
