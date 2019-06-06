@@ -1201,6 +1201,10 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
                     } else if (line.matches(".*w: .* is deprecated\\..*")) {
                         // A kotlinc warning, ignore
                         i++;
+                    } else if (line.matches("This behavior is deprecated: The .*otlinScriptDefExtensions configuration is not suitable for dependency declaration\\. This will fail with an error in Gradle .*\\. Please use/define another configuration with both canBeResolved and canBeConsumed set to false\\.")) {
+                        // The kotlin-gradle-plugin uses deprecated functionality with '*KotlinScriptDefExtensions' configurations
+                        expectStackTraces = true;
+                        i++;
                     } else if (isDeprecationMessageInHelpDescription(line)) {
                         i++;
                     } else if (line.matches(".*\\s+deprecated.*")) {
