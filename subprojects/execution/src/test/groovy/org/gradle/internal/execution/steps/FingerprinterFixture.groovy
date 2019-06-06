@@ -31,28 +31,47 @@ import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 
 abstract trait FingerprinterFixture {
     abstract TestNameTestDirectoryProvider getTemporaryFolder()
-    private fileHasher = new TestFileHasher()
-    private stringInterner = new StringInterner()
-    private fileSystem = TestFiles.fileSystem()
-    private fileSystemMirror = new DefaultFileSystemMirror(new NoWellKnownFileLocations())
+    private AbsolutePathFileCollectionFingerprinter input
+    private OutputFileCollectionFingerprinter output
 
-    final inputFingerprinter = new AbsolutePathFileCollectionFingerprinter(
-        new DefaultFileSystemSnapshotter(
-            fileHasher,
-            stringInterner,
-            fileSystem,
-            fileSystemMirror
-        )
-    )
+    def getInputFingerprinter() {
+        if (input == null) {
+            init()
+        }
+        input
+    }
 
-    final OutputFileCollectionFingerprinter outputFingerprinter = new OutputFileCollectionFingerprinter(
-        new DefaultFileSystemSnapshotter(
-            fileHasher,
-            stringInterner,
-            fileSystem,
-            fileSystemMirror
+    def getOutputFingerprinter() {
+        if (output == null) {
+            init()
+        }
+        output
+    }
+
+    private init() {
+        assert input == null && output == null
+        def fileHasher = new TestFileHasher()
+        def stringInterner = new StringInterner()
+        def fileSystem = TestFiles.fileSystem()
+        def fileSystemMirror = new DefaultFileSystemMirror(new NoWellKnownFileLocations())
+
+        input = new AbsolutePathFileCollectionFingerprinter(
+            new DefaultFileSystemSnapshotter(
+                fileHasher,
+                stringInterner,
+                fileSystem,
+                fileSystemMirror
+            )
         )
-    )
+        output = new OutputFileCollectionFingerprinter(
+            new DefaultFileSystemSnapshotter(
+                fileHasher,
+                stringInterner,
+                fileSystem,
+                fileSystemMirror
+            )
+        )
+    }
 
     ImmutableSortedMap<String, CurrentFileCollectionFingerprint> fingerprintsOf(Map<String, Object> properties) {
         def builder = ImmutableSortedMap.<String, CurrentFileCollectionFingerprint>naturalOrder()
