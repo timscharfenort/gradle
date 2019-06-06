@@ -2099,6 +2099,7 @@ org:leaf3:1.0
                maven { url "${mavenRepo.uri}" }
             }
             configurations {
+                api.canBeConsumed = false
                 api.canBeResolved = false
                 compile.extendsFrom api
             }
