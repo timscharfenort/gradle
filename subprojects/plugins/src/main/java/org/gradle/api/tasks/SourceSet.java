@@ -279,14 +279,26 @@ public interface SourceSet extends ExtensionAware {
     String getCompileClasspathConfigurationName();
 
     /**
-     * Returns the name of the configuration containing annotation processors and their
-     * dependencies needed to compile this source set.
+     * Returns the name of the configuration for defining annotation processors dependencies.
      *
      * @return the name of the annotation processor configuration.
      * @since 4.6
      */
     @Incubating
     String getAnnotationProcessorConfigurationName();
+
+
+    /**
+     * Returns the name of the configuration containing annotation processors and their
+     * dependencies needed to compile this source set.
+     *
+     * @return The annotation processor classpath configuration
+     *
+     * //FIXME make this 6.0
+     * @since 5.6
+     */
+    @Incubating
+    String getAnnotationProcessorClasspathConfigurationName();
 
     /**
      * Returns the name of the API configuration for this source set. The API configuration
