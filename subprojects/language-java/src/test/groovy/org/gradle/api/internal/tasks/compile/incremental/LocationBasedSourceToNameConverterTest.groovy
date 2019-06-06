@@ -19,19 +19,19 @@
 package org.gradle.api.internal.tasks.compile.incremental
 
 import org.gradle.api.internal.tasks.compile.incremental.recomp.CompilationSourceDirs
-import org.gradle.api.internal.tasks.compile.incremental.recomp.SourceToNameConverter
+import org.gradle.api.internal.tasks.compile.incremental.recomp.LocationBasedSourceToNameConverter
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.junit.Rule
 import spock.lang.Specification
 import spock.lang.Subject
 
-class SourceToNameConverterTest extends Specification {
+class LocationBasedSourceToNameConverterTest extends Specification {
 
     @Rule TestNameTestDirectoryProvider temp = new TestNameTestDirectoryProvider()
     def srcDirs = Stub(CompilationSourceDirs) {
         getSourceRoots() >> ["src/main/java", "src/main/java2"].collect { temp.file(it) }
     }
-    @Subject converter = new SourceToNameConverter(srcDirs)
+    @Subject converter = new LocationBasedSourceToNameConverter(srcDirs, 'java')
 
     def "knows java source class relative path"() {
         expect:
