@@ -285,4 +285,203 @@ abstract class AbstractJavaCompileAvoidanceIntegrationSpec extends AbstractJavaG
         executedAndNotSkipped(":b:${language.compileTaskName}")
         skipped(":c:${language.compileTaskName}")
     }
+
+    def "doesn't recompile when private element of implementation class changes"() {
+        given:
+        buildFile << """
+            project(':b') {
+                dependencies {
+                    implementation project(':a')
+                }
+            }
+        """
+        def sourceFile = file("a/src/main/${language.name}/ToolImpl.${language.name}")
+        sourceFile << """
+            public class ToolImpl { 
+                private String thing() { return null; }
+                private ToolImpl t = this;
+            }
+        """
+        file("b/src/main/${language.name}/Main.${language.name}") << """
+            public class Main { ToolImpl t = new ToolImpl(); }
+        """
+
+        when:
+        succeeds ":b:${language.compileTaskName}"
+
+        then:
+        executedAndNotSkipped ":a:${language.compileTaskName}"
+        executedAndNotSkipped ":b:${language.compileTaskName}"
+
+        when:
+        // change signatures
+        sourceFile.text = """
+            public class ToolImpl { 
+                private Number thing() { return null; }
+                private Object t = this;
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}"
+        skipped ":b:${language.compileTaskName}"
+
+        when:
+        // add private elements
+        sourceFile.text = """
+            public class ToolImpl { 
+                private Number thing() { return null; }
+                private Object t = this;
+                private static void someMethod() { }
+                private String s;
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}"
+        skipped ":b:${language.compileTaskName}"
+
+        when:
+        // remove private elements
+        sourceFile.text = """
+            public class ToolImpl { 
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}"
+        skipped ":b:${language.compileTaskName}"
+
+        when:
+        // add public method, should change
+        sourceFile.text = """
+            public class ToolImpl { 
+                public void execute() { String s = toString(); } 
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}", ":b:${language.compileTaskName}"
+
+        when:
+        // add public field, should change
+        sourceFile.text = """
+            public class ToolImpl { 
+                public static ToolImpl instance; 
+                public void execute() { String s = toString(); } 
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}", ":b:${language.compileTaskName}"
+
+        when:
+        // add public constructor to replace the default, should not change
+        sourceFile.text = """
+            public class ToolImpl { 
+                public ToolImpl() { }
+                public static ToolImpl instance; 
+                public void execute() { String s = toString(); } 
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}"
+        skipped ":b:${language.compileTaskName}"
+
+        when:
+        // add public constructor, should change
+        sourceFile.text = """
+            public class ToolImpl { 
+                public ToolImpl() { }
+                public ToolImpl(String s) { }
+                public static ToolImpl instance; 
+                public void execute() { String s = toString(); } 
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}", ":b:${language.compileTaskName}"
+    }
+
+    def "doesn't recompile when implementation class code changes"() {
+        given:
+        buildFile << """
+            project(':b') {
+                dependencies {
+                    implementation project(':a')
+                }
+            }
+        """
+        def sourceFile = file("a/src/main/${language.name}/ToolImpl.${language.name}")
+        sourceFile << """
+            public class ToolImpl {
+                public Object s = String.valueOf(12);
+                public void execute() { int i = 12; }
+            }
+        """
+        file("b/src/main/${language.name}/Main.${language.name}") << """
+            public class Main { ToolImpl t = new ToolImpl(); }
+        """
+
+        when:
+        succeeds ":b:${language.compileTaskName}"
+
+        then:
+        executedAndNotSkipped ":a:${language.compileTaskName}"
+        executedAndNotSkipped ":b:${language.compileTaskName}"
+
+        when:
+        // change method body and field initializer
+        sourceFile.text = """
+            public class ToolImpl {
+                public Object s = "12";
+                public void execute() { String s = toString(); }
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}"
+        skipped ":b:${language.compileTaskName}"
+
+        when:
+        // add static initializer and constructor
+        sourceFile.text = """
+            public class ToolImpl {
+                static { }
+                public ToolImpl() { }
+                public Object s = "12";
+                public void execute() { String s = toString(); }
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}"
+        skipped ":b:${language.compileTaskName}"
+
+        when:
+        // change static initializer and constructor
+        sourceFile.text = """
+            public class ToolImpl {
+                static { int i = 123; }
+                public ToolImpl() { System.out.println("created!"); }
+                public Object s = "12";
+                public void execute() { String s = toString(); }
+            }
+"""
+
+        then:
+        succeeds ":b:${language.compileTaskName}"
+        executedAndNotSkipped ":a:${language.compileTaskName}"
+        skipped ":b:${language.compileTaskName}"
+    }
 }
