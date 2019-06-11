@@ -71,23 +71,47 @@ public class ApiGroovyCompiler implements org.gradle.language.base.internal.comp
         this.javaCompiler = javaCompiler;
     }
 
-    private static class TrackingClassGenerationCompilationCustomizer extends CompilationCustomizer {
+    private static abstract class IncrementalCompilationCustomizer extends CompilationCustomizer {
+        static IncrementalCompilationCustomizer fromSpec(GroovyJavaJointCompileSpec spec) {
+            if (spec.getCompileOptions().isIncremental() && spec.getCompilationMappingFile() != null) {
+                return new TrackingClassGenerationCompilationCustomizer(spec.getCompilationMappingFile());
+            } else {
+                return new NoOpCompilationCustomizer();
+            }
+        }
+
+        public IncrementalCompilationCustomizer() {
+            super(CompilePhase.CLASS_GENERATION);
+        }
+
+        abstract void writeToMappingFile();
+
+        abstract void addToConfiguration(CompilerConfiguration configuration);
+    }
+
+    private static class NoOpCompilationCustomizer extends IncrementalCompilationCustomizer {
+        @Override
+        public void writeToMappingFile() {
+        }
+
+        @Override
+        public void addToConfiguration(CompilerConfiguration configuration) {
+        }
+
+        @Override
+        public void call(SourceUnit source, GeneratorContext context, ClassNode classNode) throws org.codehaus.groovy.control.CompilationFailedException {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static class TrackingClassGenerationCompilationCustomizer extends IncrementalCompilationCustomizer {
         private final Multimap<File, String> sourceClassesMapping = MultimapBuilder.ListMultimapBuilder
             .hashKeys()
             .arrayListValues()
             .build();
         private final File sourceClassesMappingFile;
 
-        private static TrackingClassGenerationCompilationCustomizer fromSpec(GroovyJavaJointCompileSpec spec) {
-            if (spec.getCompileOptions().isIncremental()) {
-                return new TrackingClassGenerationCompilationCustomizer(spec.getCompilationMappingFile());
-            } else {
-                return new TrackingClassGenerationCompilationCustomizer(null);
-            }
-        }
-
         private TrackingClassGenerationCompilationCustomizer(File mappingFile) {
-            super(CompilePhase.CLASS_GENERATION);
             this.sourceClassesMappingFile = mappingFile;
         }
 
@@ -104,20 +128,14 @@ public class ApiGroovyCompiler implements org.gradle.language.base.internal.comp
             }
         }
 
-        private void writeToMappingFileIfNecessary() {
-            if (enabled()) {
-                writeSourceClassesMappingFile(sourceClassesMappingFile, sourceClassesMapping);
-            }
+        @Override
+        public void writeToMappingFile() {
+            writeSourceClassesMappingFile(sourceClassesMappingFile, sourceClassesMapping);
         }
 
-        private void addToConfigurationIfNecessary(CompilerConfiguration configuration) {
-            if (enabled()) {
-                configuration.addCompilationCustomizers(this);
-            }
-        }
-
-        private boolean enabled() {
-            return sourceClassesMappingFile != null;
+        @Override
+        public void addToConfiguration(CompilerConfiguration configuration) {
+            configuration.addCompilationCustomizers(this);
         }
     }
 
@@ -134,8 +152,8 @@ public class ApiGroovyCompiler implements org.gradle.language.base.internal.comp
         configuration.setTargetDirectory(spec.getDestinationDir());
         canonicalizeValues(spec.getGroovyCompileOptions().getOptimizationOptions());
 
-        TrackingClassGenerationCompilationCustomizer customizer = TrackingClassGenerationCompilationCustomizer.fromSpec(spec);
-        customizer.addToConfigurationIfNecessary(configuration);
+        IncrementalCompilationCustomizer customizer = IncrementalCompilationCustomizer.fromSpec(spec);
+        customizer.addToConfiguration(configuration);
 
         if (spec.getGroovyCompileOptions().getConfigurationScript() != null) {
             applyConfigurationScript(spec.getGroovyCompileOptions().getConfigurationScript(), configuration);
@@ -241,7 +259,7 @@ public class ApiGroovyCompiler implements org.gradle.language.base.internal.comp
 
         try {
             unit.compile();
-            customizer.writeToMappingFileIfNecessary();
+            customizer.writeToMappingFile();
         } catch (org.codehaus.groovy.control.CompilationFailedException e) {
             System.err.println(e.getMessage());
             // Explicit flush, System.err is an auto-flushing PrintWriter unless it is replaced.
