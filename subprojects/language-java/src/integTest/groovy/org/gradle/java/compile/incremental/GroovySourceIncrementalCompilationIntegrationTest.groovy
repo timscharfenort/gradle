@@ -20,4 +20,20 @@ import org.gradle.integtests.fixtures.CompiledLanguage
 
 class GroovySourceIncrementalCompilationIntegrationTest extends AbstractSourceIncrementalCompilationIntegrationTest {
     CompiledLanguage language = CompiledLanguage.GROOVY
+
+    def setup() {
+        buildFile << """
+            dependencies {
+                implementation localGroovy()
+            }
+            
+            tasks.withType(GroovyCompile) {
+                options.incremental = true
+            }
+        """
+
+        file("gradle.properties")  << """
+systemProp.org.gradle.groovy.compilation.avoidance=true
+        """
+    }
 }

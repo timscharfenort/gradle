@@ -79,6 +79,7 @@ import java.io.File;
 import java.util.concurrent.Callable;
 
 import static org.gradle.api.internal.tasks.compile.SourceClassesMappingFileAccessor.readSourceClassesMappingFile;
+import static org.gradle.api.internal.tasks.compile.SourceClassesMappingFileAccessor.writeSourceClassesMappingFile;
 
 /**
  * Compiles Groovy source files, and optionally, Java source files.
@@ -165,16 +166,17 @@ public class GroovyCompile extends AbstractCompile {
     private void updateSourceClassesMappingFile(InputChanges inputChanges, Multimap<File, String> oldMappings) {
         Multimap<File, String> mappingsDuringIncrementalCompilation = readSourceClassesMappingFile(sourceClassesMappingFile);
 
+        for (File recompiledSource : mappingsDuringIncrementalCompilation.keySet()) {
+            oldMappings.removeAll(recompiledSource);
+        }
         for (FileChange fileChange : inputChanges.getFileChanges(getStableSources())) {
             File changedFile = fileChange.getFile();
             if (fileChange.getChangeType() == ChangeType.REMOVED) {
                 oldMappings.removeAll(changedFile);
-            } else {
-                // Is it possible to get empty result from mappingsDuringIncrementalCompilation.get(changedFile) ?
-                // I.e. a source file doesn't generate any classes.
-                oldMappings.putAll(changedFile, mappingsDuringIncrementalCompilation.get(changedFile));
             }
         }
+        oldMappings.putAll(mappingsDuringIncrementalCompilation);
+        writeSourceClassesMappingFile(sourceClassesMappingFile, oldMappings);
     }
 
     private void warnIfCompileAvoidanceEnabled() {
@@ -211,10 +213,7 @@ public class GroovyCompile extends AbstractCompile {
     }
 
     private boolean enableIncrementalCompilation(InputChanges inputChanges) {
-        return inputChanges != null
-            && inputChanges.isIncremental()
-            && getOptions().isIncremental()
-            && experimentalCompilationAvoidanceEnabled();
+        return getOptions().isIncremental();
     }
 
     private RecompilationSpecProvider createRecompilationSpecProvider(CompilationSourceDirs sourceDirs, InputChanges inputChanges, Multimap<File, String> sourceClassesMapping) {

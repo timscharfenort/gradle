@@ -26,9 +26,11 @@ import java.util.Map;
 
 public class GroovySourceToNameConverter extends LocationBasedSourceToNameConverter {
     private final Multimap<File, String> sourceClassesMapping;
+    private final CompilationSourceDirs sourceDirs;
 
     public GroovySourceToNameConverter(CompilationSourceDirs sourceDirs, Multimap<File, String> sourceClassesMapping) {
         super(sourceDirs, "groovy");
+        this.sourceDirs = sourceDirs;
         this.sourceClassesMapping = sourceClassesMapping;
     }
 
@@ -53,7 +55,7 @@ public class GroovySourceToNameConverter extends LocationBasedSourceToNameConver
     public void sourceToCompilePattern(String fqcn, PatternSet patternSet) {
         for (Map.Entry<File, String> entry : sourceClassesMapping.entries()) {
             if (fqcn.equals(entry.getValue())) {
-                patternSet.include(entry.getKey().getAbsolutePath());
+                patternSet.include(element -> element.getFile().getAbsolutePath().equals(entry.getKey().getAbsolutePath()));
                 return;
             }
         }

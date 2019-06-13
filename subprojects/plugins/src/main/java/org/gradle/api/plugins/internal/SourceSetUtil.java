@@ -47,7 +47,7 @@ public class SourceSetUtil {
             public Object call() {
                 return sourceSet.getCompileClasspath().plus(target.files(sourceSet.getJava().getOutputDir()));
             }
-        });
+        }).cache();
         compile.setDestinationDir(target.provider(new Callable<File>() {
             @Override
             public File call() {

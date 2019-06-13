@@ -506,7 +506,7 @@ sourceSets {
 
     def "recompiles classes from extra source directory provided as #type"() {
         given:
-        buildFile << "compileJava.source $method('extra-java')"
+        buildFile << "compile${language.capitalizedName}.source $method('extra-java')"
 
         source("class B {}")
         file("extra-java/A.${language.name}") << "class A extends B {}"
@@ -690,7 +690,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         r.run();
     }
 }"""
-        java '''abstract class B implements Runnable { }'''
+        source '''abstract class B implements Runnable { }'''
 
         outputs.snapshot { run language.compileTaskName }
 
@@ -715,7 +715,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         r.run();
     }
 }"""
-        java '''abstract class B implements Runnable { }'''
+        source '''abstract class B implements Runnable { }'''
 
         outputs.snapshot { run language.compileTaskName }
 
@@ -757,7 +757,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 
     def "detects changes to class referenced in method body"() {
         given:
-        java '''class A {
+        source '''class A {
     void doSomething(Object b) {
         Runnable r = (B) b;
         r.run();
@@ -777,7 +777,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 
     def "detects changes to class referenced through return type"() {
         given:
-        java '''class A {
+        source '''class A {
     B b() { return null; }
     
     void doSomething() {
@@ -785,7 +785,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         r.run();
     }
 }'''
-        java '''abstract class B implements Runnable { }'''
+        source '''abstract class B implements Runnable { }'''
 
         outputs.snapshot { run language.compileTaskName }
 
@@ -799,14 +799,14 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 
     def "detects changes to class referenced through method signature"() {
         given:
-        java '''class A {
+        source '''class A {
     Runnable go(B b) {
         Runnable r = b;
         r.run();
         return b;
     }
 }'''
-        java '''abstract class B implements Runnable { }'''
+        source '''abstract class B implements Runnable { }'''
 
         outputs.snapshot { run language.compileTaskName }
 
@@ -820,7 +820,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 
     def "detects changes to class referenced through type argument in field"() {
         given:
-        java '''class A {
+        source '''class A {
     java.util.List<B> bs;
     void doSomething() {
         for (B b: bs) {
@@ -829,7 +829,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         }
     }
 }'''
-        java '''abstract class B implements Runnable { }'''
+        source '''abstract class B implements Runnable { }'''
 
         outputs.snapshot { run language.compileTaskName }
 
@@ -843,7 +843,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 
     def "detects changes to class referenced through type argument in return type"() {
         given:
-        java '''class A {
+        source '''class A {
     java.util.List<B> bs() { return null; }
     
     void doSomething() {
@@ -853,7 +853,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         }
     }
 }'''
-        java '''abstract class B implements Runnable { }'''
+        source '''abstract class B implements Runnable { }'''
 
         outputs.snapshot { run language.compileTaskName }
 
@@ -867,7 +867,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 
     def "detects changes to class referenced through type argument in parameter"() {
         given:
-        java '''class A {
+        source '''class A {
     
     void doSomething(java.util.List<B> bs) {
         for (B b: bs) {
@@ -876,7 +876,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         }
     }
 }'''
-        java '''abstract class B implements Runnable { }'''
+        source '''abstract class B implements Runnable { }'''
 
         outputs.snapshot { run language.compileTaskName }
 
@@ -909,7 +909,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         ! file("build/classes/java/main/com/foo").exists()
     }
 
-    def "recompiles types whose names look like inne classes even if they aren't"() {
+    def "recompiles types whose names look like inner classes even if they aren't"() {
         given:
         file('src/main/${language.name}/Test.${language.name}') << 'public class Test{}'
         file('src/main/${language.name}/Test$$InnerClass.${language.name}') << 'public class Test$$InnerClass{}'
@@ -972,7 +972,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
             }
         """
 
-        succeedslanguage.compileTaskName
+        succeeds language.compileTaskName
 
         when:
         moduleInfo.text = """
@@ -981,7 +981,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         """
 
         then:
-        failslanguage.compileTaskName
+        fails language.compileTaskName
         result.assertHasErrorOutput("package java.util.logging is not visible")
     }
 

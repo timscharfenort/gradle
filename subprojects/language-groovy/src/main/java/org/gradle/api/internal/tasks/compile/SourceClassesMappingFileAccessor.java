@@ -86,5 +86,6 @@ public class SourceClassesMappingFileAccessor {
         }
 
         GFileUtils.writeFile(sb.toString(), mappingFile);
+        System.out.println("Mapping: " + sb.toString());
     }
 }
