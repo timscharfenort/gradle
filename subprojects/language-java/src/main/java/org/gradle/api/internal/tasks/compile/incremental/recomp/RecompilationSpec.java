@@ -17,17 +17,29 @@
 package org.gradle.api.internal.tasks.compile.incremental.recomp;
 
 import org.gradle.api.internal.tasks.compile.incremental.processing.GeneratedResource;
+import org.gradle.api.tasks.util.PatternSet;
 
 import java.io.File;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 
 public class RecompilationSpec {
-
     private final Collection<String> classesToCompile = new NormalizingClassNamesSet();
     private final Collection<String> classesToProcess = new NormalizingClassNamesSet();
     private final Collection<GeneratedResource> resourcesToGenerate = new LinkedHashSet<GeneratedResource>();
+    private final SourceFileClassNameConverter sourceFileClassNameConverter;
     private String fullRebuildCause;
+
+    public RecompilationSpec(SourceFileClassNameConverter sourceFileClassNameConverter) {
+        this.sourceFileClassNameConverter = sourceFileClassNameConverter;
+    }
+
+    public void preparePatterns(PatternSet filesToDelete, PatternSet sourceToCompile) {
+        for (String staleClass : classesToCompile) {
+            sourceFileClassNameConverter.fileToDeletePattern(staleClass, filesToDelete);
+            sourceFileClassNameConverter.sourceToCompilePattern(staleClass, sourceToCompile);
+        }
+    }
 
     public Collection<String> getClassesToCompile() {
         return classesToCompile;

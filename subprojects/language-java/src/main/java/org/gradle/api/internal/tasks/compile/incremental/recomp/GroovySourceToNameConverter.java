@@ -18,9 +18,11 @@ package org.gradle.api.internal.tasks.compile.incremental.recomp;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
+import org.gradle.api.tasks.util.PatternSet;
 
 import java.io.File;
 import java.util.Collection;
+import java.util.Map;
 
 public class GroovySourceToNameConverter extends LocationBasedSourceToNameConverter {
     private final Multimap<File, String> sourceClassesMapping;
@@ -33,11 +35,30 @@ public class GroovySourceToNameConverter extends LocationBasedSourceToNameConver
     @Override
     public Collection<String> getClassNames(File groovySourceFile) {
         Collection<String> classes = sourceClassesMapping.get(groovySourceFile);
-        if(classes.isEmpty()) {
+        if (classes.isEmpty()) {
             // new files
             return super.getClassNames(groovySourceFile);
-        }else {
+        } else {
             return ImmutableSet.copyOf(classes);
         }
+    }
+
+    @Override
+    public void fileToDeletePattern(String fqcn, PatternSet patternSet) {
+        String path = fqcn.replaceAll("\\.", "/");
+        patternSet.include(path.concat(".class"));
+    }
+
+    @Override
+    public void sourceToCompilePattern(String fqcn, PatternSet patternSet) {
+        for (Map.Entry<File, String> entry : sourceClassesMapping.entries()) {
+            if (fqcn.equals(entry.getValue())) {
+                patternSet.include(entry.getKey().getAbsolutePath());
+                return;
+            }
+        }
+
+        String path = fqcn.replaceAll("\\.", "/");
+        patternSet.include(path.concat(".groovy"));
     }
 }

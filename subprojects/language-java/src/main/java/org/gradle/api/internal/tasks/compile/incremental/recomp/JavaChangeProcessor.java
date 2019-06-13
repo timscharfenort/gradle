@@ -23,10 +23,10 @@ import org.gradle.api.tasks.incremental.InputFileDetails;
 import java.util.Collection;
 
 class JavaChangeProcessor {
-    private final SourceToNameConverter sourceToNameConverter;
+    private final SourceFileClassNameConverter sourceToNameConverter;
     private final PreviousCompilation previousCompilation;
 
-    public JavaChangeProcessor(PreviousCompilation previousCompilation, SourceToNameConverter sourceToNameConverter) {
+    public JavaChangeProcessor(PreviousCompilation previousCompilation, SourceFileClassNameConverter sourceToNameConverter) {
         this.previousCompilation = previousCompilation;
         this.sourceToNameConverter = sourceToNameConverter;
     }

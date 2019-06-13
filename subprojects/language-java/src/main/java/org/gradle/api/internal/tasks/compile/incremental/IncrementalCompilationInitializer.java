@@ -56,7 +56,7 @@ class IncrementalCompilationInitializer {
         PatternSet classesToDelete = patternSetFactory.create();
         PatternSet sourceToCompile = patternSetFactory.create();
 
-        prepareJavaPatterns(recompilationSpec.getClassesToCompile(), classesToDelete, sourceToCompile);
+        recompilationSpec.preparePatterns(classesToDelete, sourceToCompile);
         spec.setSourceFiles(narrowDownSourcesToCompile(sourceTree, sourceToCompile));
         includePreviousCompilationOutputOnClasspath(spec);
         addClassesToProcess(spec, recompilationSpec);
@@ -97,25 +97,6 @@ class IncrementalCompilationInitializer {
         SimpleStaleClassCleaner cleaner = new SimpleStaleClassCleaner(toDelete);
         cleaner.addDirToClean(destinationDir);
         cleaner.execute();
-    }
-
-    private void prepareJavaPatterns(Collection<String> staleClasses, PatternSet filesToDelete, PatternSet sourceToCompile) {
-        for (String staleClass : staleClasses) {
-            String path = staleClass.replaceAll("\\.", "/");
-            filesToDelete.include(path.concat(".class"));
-            filesToDelete.include(path.concat(".java"));
-            filesToDelete.include(path.concat(".groovy"));
-            filesToDelete.include(path.concat(".h"));
-            filesToDelete.include(path.concat("$*.class"));
-            filesToDelete.include(path.concat("$*.java"));
-            filesToDelete.include(path.concat("$*.groovy"));
-            filesToDelete.include(path.concat("$*.h"));
-
-            sourceToCompile.include(path.concat(".java"));
-            sourceToCompile.include(path.concat(".groovy"));
-            sourceToCompile.include(path.concat("$*.java"));
-            sourceToCompile.include(path.concat("$*.groovy"));
-        }
     }
 
     private static Map<GeneratedResource.Location, PatternSet> prepareResourcePatterns(Collection<GeneratedResource> staleResources, Factory<PatternSet> patternSetFactory) {

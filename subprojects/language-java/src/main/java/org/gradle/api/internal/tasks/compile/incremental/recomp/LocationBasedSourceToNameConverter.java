@@ -16,6 +16,7 @@
 
 package org.gradle.api.internal.tasks.compile.incremental.recomp;
 
+import org.gradle.api.tasks.util.PatternSet;
 import org.gradle.util.RelativePathUtil;
 
 import java.io.File;
@@ -25,7 +26,7 @@ import java.util.List;
 
 import static java.lang.String.format;
 
-public class LocationBasedSourceToNameConverter implements SourceToNameConverter {
+public class LocationBasedSourceToNameConverter implements SourceFileClassNameConverter {
     private final CompilationSourceDirs sourceDirs;
     private final String extension;
 
@@ -47,5 +48,23 @@ public class LocationBasedSourceToNameConverter implements SourceToNameConverter
         }
         throw new IllegalArgumentException(format("Unable to find source class: '%s' because it does not belong to any of the source dirs: '%s'",
             sourceFile, dirs));
+    }
+
+    @Override
+    public void fileToDeletePattern(String fqcn, PatternSet patternSet) {
+        String path = fqcn.replaceAll("\\.", "/");
+        patternSet.include(path.concat(".class"));
+        patternSet.include(path.concat(".java"));
+        patternSet.include(path.concat(".h"));
+        patternSet.include(path.concat("$*.class"));
+        patternSet.include(path.concat("$*.java"));
+        patternSet.include(path.concat("$*.h"));
+    }
+
+    @Override
+    public void sourceToCompilePattern(String fqcn, PatternSet patternSet) {
+        String path = fqcn.replaceAll("\\.", "/");
+        patternSet.include(path.concat(".java"));
+        patternSet.include(path.concat("$*.java"));
     }
 }

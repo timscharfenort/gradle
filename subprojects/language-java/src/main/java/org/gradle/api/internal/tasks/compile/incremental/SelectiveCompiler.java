@@ -25,7 +25,6 @@ import org.gradle.api.internal.tasks.compile.incremental.recomp.PreviousCompilat
 import org.gradle.api.internal.tasks.compile.incremental.recomp.RecompilationSpec;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.RecompilationSpecProvider;
 import org.gradle.api.tasks.WorkResult;
-import org.gradle.api.tasks.incremental.IncrementalTaskInputs;
 import org.gradle.internal.time.Time;
 import org.gradle.internal.time.Timer;
 import org.gradle.language.base.internal.compile.Compiler;
@@ -36,7 +35,6 @@ import java.util.Collection;
 
 class SelectiveCompiler<T extends JavaCompileSpec> implements org.gradle.language.base.internal.compile.Compiler<T> {
     private static final Logger LOG = LoggerFactory.getLogger(SelectiveCompiler.class);
-    private final IncrementalTaskInputs inputs;
     private final PreviousCompilation previousCompilation;
     private final CleaningJavaCompilerSupport<T> cleaningCompiler;
     private final Compiler<T> rebuildAllCompiler;
@@ -44,9 +42,12 @@ class SelectiveCompiler<T extends JavaCompileSpec> implements org.gradle.languag
     private final IncrementalCompilationInitializer incrementalCompilationInitializer;
     private final ClasspathSnapshotProvider classpathSnapshotProvider;
 
-    public SelectiveCompiler(IncrementalTaskInputs inputs, PreviousCompilation previousCompilation, CleaningJavaCompilerSupport<T> cleaningCompiler,
-                             Compiler<T> rebuildAllCompiler, RecompilationSpecProvider recompilationSpecProvider, IncrementalCompilationInitializer compilationInitializer, ClasspathSnapshotProvider classpathSnapshotProvider) {
-        this.inputs = inputs;
+    public SelectiveCompiler(PreviousCompilation previousCompilation,
+                             CleaningJavaCompilerSupport<T> cleaningCompiler,
+                             Compiler<T> rebuildAllCompiler,
+                             RecompilationSpecProvider recompilationSpecProvider,
+                             IncrementalCompilationInitializer compilationInitializer,
+                             ClasspathSnapshotProvider classpathSnapshotProvider) {
         this.previousCompilation = previousCompilation;
         this.cleaningCompiler = cleaningCompiler;
         this.rebuildAllCompiler = rebuildAllCompiler;
@@ -58,7 +59,7 @@ class SelectiveCompiler<T extends JavaCompileSpec> implements org.gradle.languag
     @Override
     public WorkResult execute(T spec) {
         Timer clock = Time.startTimer();
-        CurrentCompilation currentCompilation = new CurrentCompilation(inputs, spec, classpathSnapshotProvider);
+        CurrentCompilation currentCompilation = new CurrentCompilation(spec, classpathSnapshotProvider);
 
         RecompilationSpec recompilationSpec = recompilationSpecProvider.provideRecompilationSpec(currentCompilation, previousCompilation);
 

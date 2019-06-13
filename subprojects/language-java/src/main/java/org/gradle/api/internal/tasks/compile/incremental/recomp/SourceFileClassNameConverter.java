@@ -16,8 +16,15 @@
 
 package org.gradle.api.internal.tasks.compile.incremental.recomp;
 
-public interface RecompilationSpecProvider {
-    boolean isIncremental();
+import org.gradle.api.tasks.util.PatternSet;
 
-    RecompilationSpec provideRecompilationSpec(CurrentCompilation current, PreviousCompilation previous);
+import java.io.File;
+import java.util.Collection;
+
+public interface SourceFileClassNameConverter {
+    Collection<String> getClassNames(File javaSourceClass);
+
+    void fileToDeletePattern(String fqcn, PatternSet patternSet);
+
+    void sourceToCompilePattern(String fqcn, PatternSet patternSet);
 }

@@ -26,7 +26,6 @@ import org.gradle.api.internal.tasks.compile.incremental.recomp.PreviousCompilat
 import org.gradle.api.internal.tasks.compile.incremental.recomp.PreviousCompilationData;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.PreviousCompilationOutputAnalyzer;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.RecompilationSpecProvider;
-import org.gradle.api.tasks.incremental.IncrementalTaskInputs;
 import org.gradle.language.base.internal.compile.Compiler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +39,6 @@ public class IncrementalCompilerDecorator<T extends JavaCompileSpec> {
     private final ClasspathSnapshotMaker classpathSnapshotMaker;
     private final TaskScopedCompileCaches compileCaches;
     private final CleaningJavaCompilerSupport<T> cleaningCompiler;
-    private final RecompilationSpecProvider recompilationSpecProvider;
     private final CompilationSourceDirs sourceDirs;
     private final Compiler<T> rebuildAllCompiler;
     private final IncrementalCompilationInitializer compilationInitializer;
@@ -51,7 +49,6 @@ public class IncrementalCompilerDecorator<T extends JavaCompileSpec> {
                                         TaskScopedCompileCaches compileCaches,
                                         IncrementalCompilationInitializer compilationInitializer,
                                         CleaningJavaCompilerSupport<T> cleaningCompiler,
-                                        RecompilationSpecProvider recompilationSpecProvider,
                                         CompilationSourceDirs sourceDirs,
                                         Compiler<T> rebuildAllCompiler,
                                         PreviousCompilationOutputAnalyzer previousCompilationOutputAnalyzer,
@@ -60,20 +57,19 @@ public class IncrementalCompilerDecorator<T extends JavaCompileSpec> {
         this.compileCaches = compileCaches;
         this.compilationInitializer = compilationInitializer;
         this.cleaningCompiler = cleaningCompiler;
-        this.recompilationSpecProvider = recompilationSpecProvider;
         this.sourceDirs = sourceDirs;
         this.rebuildAllCompiler = rebuildAllCompiler;
         this.previousCompilationOutputAnalyzer = previousCompilationOutputAnalyzer;
         this.interner = interner;
     }
 
-    public Compiler<T> prepareCompiler(IncrementalTaskInputs inputs) {
-        Compiler<T> compiler = getCompiler(inputs, sourceDirs);
+    public Compiler<T> prepareCompiler(RecompilationSpecProvider recompilationSpecProvider) {
+        Compiler<T> compiler = getCompiler(recompilationSpecProvider, sourceDirs);
         return new IncrementalResultStoringCompiler<T>(compiler, classpathSnapshotMaker, compileCaches.getPreviousCompilationStore(), interner);
     }
 
-    private Compiler<T> getCompiler(IncrementalTaskInputs inputs, CompilationSourceDirs sourceDirs) {
-        if (!inputs.isIncremental()) {
+    private Compiler<T> getCompiler(RecompilationSpecProvider recompilationSpecProvider, CompilationSourceDirs sourceDirs) {
+        if (!recompilationSpecProvider.isIncremental()) {
             LOG.info("Full recompilation is required because no incremental change information is available. This is usually caused by clean builds or changing compiler arguments.");
             return rebuildAllCompiler;
         }
@@ -88,6 +84,6 @@ public class IncrementalCompilerDecorator<T extends JavaCompileSpec> {
         }
 
         PreviousCompilation previousCompilation = new PreviousCompilation(data, compileCaches.getClasspathEntrySnapshotCache(), previousCompilationOutputAnalyzer);
-        return new SelectiveCompiler<T>(inputs, previousCompilation, cleaningCompiler, rebuildAllCompiler, recompilationSpecProvider, compilationInitializer, classpathSnapshotMaker);
+        return new SelectiveCompiler<T>(previousCompilation, cleaningCompiler, rebuildAllCompiler, recompilationSpecProvider, compilationInitializer, classpathSnapshotMaker);
     }
 }

@@ -28,9 +28,7 @@ import org.gradle.api.internal.tasks.compile.DefaultJavaCompileSpec;
 import org.gradle.api.internal.tasks.compile.DefaultJavaCompileSpecFactory;
 import org.gradle.api.internal.tasks.compile.JavaCompileSpec;
 import org.gradle.api.internal.tasks.compile.incremental.IncrementalCompilerFactory;
-import org.gradle.api.internal.tasks.compile.incremental.recomp.CompilationSourceDirs;
-import org.gradle.api.internal.tasks.compile.incremental.recomp.LocationBasedSourceToNameConverter;
-import org.gradle.api.internal.tasks.compile.incremental.recomp.SourceToNameConverter;
+import org.gradle.api.internal.tasks.compile.incremental.recomp.JavaRecompilationSpecProvider;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.CompileClasspath;
@@ -53,7 +51,6 @@ import org.gradle.util.SingleMessageLogger;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.io.File;
-import java.util.function.Function;
 
 /**
  * Compiles Java source files.
@@ -120,15 +117,8 @@ public class JavaCompile extends AbstractCompile {
         Compiler<JavaCompileSpec> incrementalCompiler = getIncrementalCompilerFactory().makeIncremental(
             createCompiler(spec),
             getPath(),
-            inputs,
             getSource(),
-            ".java",
-            new Function<CompilationSourceDirs, SourceToNameConverter>() {
-                @Override
-                public SourceToNameConverter apply(CompilationSourceDirs sourceDirs) {
-                    return new LocationBasedSourceToNameConverter(sourceDirs, "java");
-                }
-            }
+            sourceDirs -> new JavaRecompilationSpecProvider(sourceDirs, inputs)
         );
         performCompilation(spec, incrementalCompiler);
     }

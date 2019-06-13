@@ -29,9 +29,19 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 
+/**
+ * Read and write a file recording Groovy source file to Groovy classes mapping.
+ *
+ * The file format is:
+ *
+ * file:///my/path/to/groovy/source/MyGroovyClass.groovy
+ *  org.gradle.MyGroovyClass
+ *  org.gradle.MyGroovyClass$1
+ *  org.gradle.MyGroovyClass$Inner
+ */
 public class SourceClassesMappingFileAccessor {
     public static Multimap<File, String> readSourceClassesMappingFile(File mappingFile) {
-        Multimap<File, String> sourceClassesMapping = MultimapBuilder.ListMultimapBuilder
+        Multimap<File, String> sourceClassesMapping = MultimapBuilder.SetMultimapBuilder
             .hashKeys()
             .arrayListValues()
             .build();
