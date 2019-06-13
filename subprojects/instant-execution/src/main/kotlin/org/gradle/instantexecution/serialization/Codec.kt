@@ -74,7 +74,15 @@ interface IsolateContext {
     val isolate: Isolate
 
     var trace: PropertyTrace
+
+    val warnings: MutableCollection<PropertyWarning>
 }
+
+
+data class PropertyWarning(
+    val trace: PropertyTrace,
+    val message: String
+)
 
 
 sealed class PropertyTrace {
@@ -103,6 +111,22 @@ sealed class PropertyTrace {
         is Task -> "task `$path` of type `${type.name}`"
         is Unknown -> "unknown property"
     }
+
+    val sequence: Sequence<PropertyTrace>
+        get() = sequence {
+            var trace = this@PropertyTrace
+            while (true) {
+                yield(trace)
+                trace = trace.tail ?: break
+            }
+        }
+
+    val tail: PropertyTrace?
+        get() = when (this) {
+            is Bean -> trace
+            is Property -> trace
+            else -> null
+        }
 }
 
 

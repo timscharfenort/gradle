@@ -132,6 +132,8 @@ abstract class AbstractIsolateContext<T> : MutableIsolateContext {
 
     var trace: PropertyTrace = PropertyTrace.Unknown
 
+    val warnings = mutableListOf<PropertyWarning>()
+
     protected
     abstract fun newIsolate(owner: Task): T
 

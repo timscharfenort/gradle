@@ -21,6 +21,7 @@ import org.gradle.api.logging.Logging
 import org.gradle.initialization.InstantExecution
 import org.gradle.instantexecution.serialization.DefaultReadContext
 import org.gradle.instantexecution.serialization.DefaultWriteContext
+import org.gradle.instantexecution.serialization.PropertyWarning
 import org.gradle.instantexecution.serialization.beans.BeanPropertyReader
 import org.gradle.instantexecution.serialization.codecs.Codecs
 import org.gradle.instantexecution.serialization.codecs.TaskGraphCodec
@@ -96,22 +97,26 @@ class DefaultInstantExecution(
         }
 
         buildOperationExecutor.withStoreOperation {
-            KryoBackedEncoder(stateFileOutputStream()).use { encoder ->
-                writeContextFor(encoder).run {
+            report(
+                KryoBackedEncoder(stateFileOutputStream()).use { encoder ->
+                    writeContextFor(encoder).run {
 
-                    val build = host.currentBuild
-                    writeString(build.rootProject.name)
-                    val scheduledTasks = build.scheduledTasks
-                    writeRelevantProjectsFor(scheduledTasks)
+                        val build = host.currentBuild
+                        writeString(build.rootProject.name)
+                        val scheduledTasks = build.scheduledTasks
+                        writeRelevantProjectsFor(scheduledTasks)
 
-                    val tasksClassPath = classPathFor(scheduledTasks)
-                    writeClassPath(tasksClassPath)
+                        val tasksClassPath = classPathFor(scheduledTasks)
+                        writeClassPath(tasksClassPath)
 
-                    TaskGraphCodec().run {
-                        writeTaskGraphOf(build, scheduledTasks)
+                        TaskGraphCodec().run {
+                            writeTaskGraphOf(build, scheduledTasks)
+                        }
+
+                        warnings
                     }
                 }
-            }
+            )
         }
     }
 
@@ -140,6 +145,18 @@ class DefaultInstantExecution(
                     build.scheduleTasks(scheduledTasks)
                 }
             }
+        }
+    }
+
+    private
+    fun report(warnings: List<PropertyWarning>) {
+        if (warnings.isEmpty()) {
+            return
+        }
+
+        InstantExecutionReport(warnings, reportFile).run {
+            logger.lifecycle(summary)
+            writeReportFile()
         }
     }
 
@@ -239,6 +256,13 @@ class DefaultInstantExecution(
         val baseName = HashUtil.createCompactMD5(host.requestedTaskNames.joinToString("/"))
         val cacheFileName = "$baseName.bin"
         File(cacheDir, cacheFileName)
+    }
+
+    private
+    val reportFile by lazy {
+        instantExecutionStateFile.run {
+            File(parentFile, "$nameWithoutExtension.html")
+        }
     }
 }
 
