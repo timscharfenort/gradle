@@ -19,12 +19,14 @@ package org.gradle.java.compile.incremental
 import groovy.transform.NotYetImplemented
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.CompilationOutputsFixture
+import org.gradle.integtests.fixtures.CompiledLanguage
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 import spock.lang.Issue
 import spock.lang.Unroll
 
-class SourceIncrementalJavaCompilationIntegrationTest extends AbstractIntegrationSpec {
+abstract class AbstractSourceIncrementalCompilationIntegrationTest extends AbstractIntegrationSpec {
+    abstract CompiledLanguage getLanguage()
 
     CompilationOutputsFixture outputs
 
@@ -32,16 +34,16 @@ class SourceIncrementalJavaCompilationIntegrationTest extends AbstractIntegratio
         outputs = new CompilationOutputsFixture(file("build/classes"))
 
         buildFile << """
-            apply plugin: 'java'
+            apply plugin: '${language.name}'
         """
     }
 
-    private File java(String... classBodies) {
+    private File source(String... classBodies) {
         File out
         for (String body : classBodies) {
             def className = (body =~ /(?s).*?(?:class|interface|enum) (\w+) .*/)[0][1]
             assert className: "unable to find class name"
-            def f = file("src/main/java/${className}.java")
+            def f = file("src/main/${language.name}/${className}.${language.name}")
             f.createFile()
             f.text = body
             out = f
@@ -50,16 +52,16 @@ class SourceIncrementalJavaCompilationIntegrationTest extends AbstractIntegratio
     }
 
     def "detects deletion of an isolated source class with an inner class"() {
-        def a = java """class A {
+        def a = source """class A {
             class InnerA {}
         }"""
-        java "class B {}"
+        source "class B {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
         assert a.delete()
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.noneRecompiled() //B is not recompiled
@@ -67,61 +69,61 @@ class SourceIncrementalJavaCompilationIntegrationTest extends AbstractIntegratio
     }
 
     def "detects deletion of a source base class that leads to compilation failure"() {
-        def a = java "class A {}"
-        java "class B extends A {}"
+        def a = source "class A {}"
+        source "class B extends A {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
         assert a.delete()
         then:
-        fails "compileJava"
+        fails language.compileTaskName
         outputs.noneRecompiled()
         outputs.deletedClasses 'A', 'B'
     }
 
     def "detects change of an isolated source class with an inner class"() {
-        java """class A {
+        source """class A {
             class InnerA {}
         }"""
-        java "class B {}"
+        source "class B {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java """class A {
+        source """class A {
             class InnerA { /* change */ }
         }"""
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'A', 'A$InnerA'
     }
 
     def "detects change of an isolated class"() {
-        java "class A {}", "class B {}"
+        source "class A {}", "class B {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class A { /* change */ }"
-        run "compileJava"
+        source "class A { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'A'
     }
 
     def "detects deletion of an inner class"() {
-        java """class A {
+        source """class A {
             class InnerA {}
         }"""
-        java "class B {}"
+        source "class B {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class A {}"
-        run "compileJava"
+        source "class A {}"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'A'
@@ -129,18 +131,18 @@ class SourceIncrementalJavaCompilationIntegrationTest extends AbstractIntegratio
     }
 
     def "detects rename of an inner class"() {
-        java """class A {
+        source """class A {
             class InnerA {}
         }"""
-        java "class B {}"
+        source "class B {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java """class A {
+        source """class A {
             class InnerA2 {}
         }"""
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'A', 'A$InnerA2'
@@ -148,64 +150,64 @@ class SourceIncrementalJavaCompilationIntegrationTest extends AbstractIntegratio
     }
 
     def "detects addition af a new class with an inner class"() {
-        java "class B {}"
+        source "class B {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java """class A {
+        source """class A {
             class InnerA {}
         }"""
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'A', 'A$InnerA'
     }
 
     def "detects transitive dependencies"() {
-        java "class A {}", "class B extends A {}", "class C extends B {}", "class D {}"
-        outputs.snapshot { run "compileJava" }
+        source "class A {}", "class B extends A {}", "class C extends B {}", "class D {}"
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class A { /* change */ }"
-        run "compileJava"
+        source "class A { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'A', 'B', 'C'
 
         when:
         outputs.snapshot()
-        java "class B { /* change */ }"
-        run "compileJava"
+        source "class B { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'B', 'C'
     }
 
     def "detects transitive dependencies with inner classes"() {
-        java "class A {}", "class B extends A {}", "class D {}"
-        java """class C extends B {
+        source "class A {}", "class B extends A {}", "class D {}"
+        source """class C extends B {
             class InnerC {}
         }
         """
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class A { /* change */ }"
-        run "compileJava"
+        source "class A { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'A', 'B', 'C', 'C$InnerC'
     }
 
     def "handles cycles in class dependencies"() {
-        java "class A {}", "class D {}"
-        java "class B extends A { C c; }", "class C extends B {}" //cycle
-        outputs.snapshot { run "compileJava" }
+        source "class A {}", "class D {}"
+        source "class B extends A { C c; }", "class C extends B {}" //cycle
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class A { /* change */ }"
-        run "compileJava"
+        source "class A { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'A', 'B', 'C'
@@ -213,18 +215,18 @@ class SourceIncrementalJavaCompilationIntegrationTest extends AbstractIntegratio
 
     @Unroll
     def "change to #retention retention annotation class recompiles #desc"() {
-        def annotationClass = file("src/main/java/SomeAnnotation.java") << """
+        def annotationClass = file("src/main/${language.name}/SomeAnnotation.${language.name}") << """
             import java.lang.annotation.*;
 
             @Retention(RetentionPolicy.$retention) 
             public @interface SomeAnnotation {}
         """
-        java "@SomeAnnotation class A {}", "class B {}"
-        outputs.snapshot { run "compileJava" }
+        source "@SomeAnnotation class A {}", "class B {}"
+        outputs.snapshot { run language.compileTaskName }
 
         when:
         annotationClass.text += "/* change */"
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses(expected as String[])
@@ -237,117 +239,117 @@ class SourceIncrementalJavaCompilationIntegrationTest extends AbstractIntegratio
     }
 
     def "change to class referenced by an annotation recompiles annotated types"() {
-        java """
+        source """
             import java.lang.annotation.*;
             @Retention(RetentionPolicy.CLASS) 
             public @interface B {
                 Class<?> value();
             }
         """
-        def a = java "class A {}"
-        java "@B(A.class) class OnClass {}",
+        def a = source "class A {}"
+        source "@B(A.class) class OnClass {}",
             "class OnMethod { @B(A.class) void foo() {} }",
             "class OnField { @B(A.class) String foo; }",
             "class OnParameter { void foo(@B(A.class) int x) {} }"
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
         a.text += "/* change */"
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("A", "OnClass", "OnMethod", "OnParameter", "OnField")
     }
 
     def "change to class referenced by an array value in an annotation recompiles annotated types"() {
-        java """
+        source """
             import java.lang.annotation.*;
             @Retention(RetentionPolicy.CLASS) 
             public @interface B {
                 Class<?>[] value();
             }
         """
-        def a = java "class A {}"
-        java "@B(A.class) class OnClass {}",
+        def a = source "class A {}"
+        source "@B(A.class) class OnClass {}",
             "class OnMethod { @B(A.class) void foo() {} }",
             "class OnField { @B(A.class) String foo; }",
             "class OnParameter { void foo(@B(A.class) int x) {} }"
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
         a.text += "/* change */"
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("A", "OnClass", "OnMethod", "OnParameter", "OnField")
     }
 
     def "change to enum referenced by an annotation recompiles annotated types"() {
-        java """
+        source """
             import java.lang.annotation.*;
             @Retention(RetentionPolicy.CLASS) 
             public @interface B {
                 A value();
             }
         """
-        def a = java "enum A { FOO }"
-        java "@B(A.FOO) class OnClass {}",
+        def a = source "enum A { FOO }"
+        source "@B(A.FOO) class OnClass {}",
             "class OnMethod { @B(A.FOO) void foo() {} }",
             "class OnField { @B(A.FOO) String foo; }",
             "class OnParameter { void foo(@B(A.FOO) int x) {} }"
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
         a.text += "/* change */"
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("A", "B", "OnClass", "OnMethod", "OnParameter", "OnField")
     }
 
     def "change to value in nested annotation recompiles annotated types"() {
-        java """
+        source """
             import java.lang.annotation.*;
             @Retention(RetentionPolicy.CLASS) 
             public @interface B {
                 A value();
             }
         """
-        java "public @interface A { Class<?> value(); }"
-        def c = java "class C {}"
-        java "@B(@A(C.class)) class OnClass {}",
+        source "public @interface A { Class<?> value(); }"
+        def c = source "class C {}"
+        source "@B(@A(C.class)) class OnClass {}",
             "class OnMethod { @B(@A(C.class)) void foo() {} }",
             "class OnField { @B(@A(C.class)) String foo; }",
             "class OnParameter { void foo(@B(@A(C.class)) int x) {} }"
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
         c.text += "/* change */"
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("C", "OnClass", "OnMethod", "OnParameter", "OnField")
     }
 
     def "changed class with private constant does not incur full rebuild"() {
-        java "class A {}", "class B { private final static int x = 1;}"
-        outputs.snapshot { run "compileJava" }
+        source "class A {}", "class B { private final static int x = 1;}"
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class B { /* change */ }"
-        run "compileJava"
+        source "class B { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'B'
     }
 
     def "changed class with used non-private constant incurs full rebuild"() {
-        java "class A { int foo() { return 1; } }", "class B { final static int x = 1;}"
-        outputs.snapshot { run "compileJava" }
+        source "class A { int foo() { return 1; } }", "class B { final static int x = 1;}"
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class B { /* change */ }"
-        run "compileJava"
+        source "class B { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'B', 'A'
@@ -356,89 +358,89 @@ class SourceIncrementalJavaCompilationIntegrationTest extends AbstractIntegratio
     @NotYetImplemented
     //  Can re-enable with compiler plugins. See gradle/gradle#1474
     def "changing an unused non-private constant incurs partial rebuild"() {
-        java "class A { int foo() { return 2; } }", "class B { final static int x = 1;}"
-        outputs.snapshot { run "compileJava" }
+        source "class A { int foo() { return 2; } }", "class B { final static int x = 1;}"
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class B { /* change */ }"
-        run "compileJava"
+        source "class B { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'B'
     }
 
     def "dependent class with non-private constant does not incur full rebuild"() {
-        java "class A {}", "class B extends A { final static int x = 1;}", "class C {}"
-        outputs.snapshot { run "compileJava" }
+        source "class A {}", "class B extends A { final static int x = 1;}", "class C {}"
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class A { /* change */ }"
-        run "compileJava"
+        source "class A { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses 'B', 'A'
     }
 
     def "detects class changes in subsequent runs ensuring the class dependency data is refreshed"() {
-        java "class A {}", "class B {}", "class C {}"
-        outputs.snapshot { run "compileJava" }
+        source "class A {}", "class B {}", "class C {}"
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java "class B extends A {}"
-        run "compileJava"
+        source "class B extends A {}"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses('B')
 
         when:
         outputs.snapshot()
-        java "class A { /* change */ }"
-        run "compileJava"
+        source "class A { /* change */ }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses('A', 'B')
     }
 
     def "handles multiple compile tasks within a single project"() {
-        java "class A {}", "class B extends A {}"
-        file("src/integTest/java/X.java") << "class X {}"
-        file("src/integTest/java/Y.java") << "class Y extends X {}"
+        source "class A {}", "class B extends A {}"
+        file("src/integTest/${language.name}/X.${language.name}") << "class X {}"
+        file("src/integTest/${language.name}/Y.${language.name}") << "class Y extends X {}"
 
         //new separate compile task (integTestCompile)
         file("build.gradle") << """
-            sourceSets { integTest.java.srcDir 'src/integTest/java' }
+            sourceSets { integTest.${language.name}.srcDir 'src/integTest/java' }
         """
 
-        outputs.snapshot { run "compileIntegTestJava", "compileJava" }
+        outputs.snapshot { run "compileIntegTestJava", language.compileTaskName }
 
         when: //when A class is changed
-        java "class A { String change; }"
-        run "compileIntegTestJava", "compileJava", "-i"
+        source "class A { String change; }"
+        run "compileIntegTestJava", language.compileTaskName, "-i"
 
         then: //only B and A are recompiled
         outputs.recompiledClasses("A", "B")
 
         when: //when X class is changed
         outputs.snapshot()
-        file("src/integTest/java/X.java").text = "class X { String change;}"
-        run "compileIntegTestJava", "compileJava", "-i"
+        file("src/integTest/${language.name}/X.${language.name}").text = "class X { String change;}"
+        run "compileIntegTestJava", language.compileTaskName, "-i"
 
         then: //only X and Y are recompiled
         outputs.recompiledClasses("X", "Y")
     }
 
     def "recompiles classes from extra source directories"() {
-        buildFile << "sourceSets.main.java.srcDir 'extra-java'"
+        buildFile << "sourceSets.main.${language.name}.srcDir 'extra-java'"
 
-        java("class B {}")
-        file("extra-java/A.java") << "class A extends B {}"
-        file("extra-java/C.java") << "class C {}"
+        source("class B {}")
+        file("extra-java/A.${language.name}") << "class A extends B {}"
+        file("extra-java/C.${language.name}") << "class C {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java("class B { String change; } ")
-        run "compileJava"
+        source("class B { String change; } ")
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("B", "A")
@@ -452,30 +454,30 @@ sourceSets {
 }
 """
 
-        java("class Main extends com.foo.Other {}")
-        file("src/other/java/com/foo/Other.java") << "package com.foo; public class Other {}"
+        source("class Main extends com.foo.Other {}")
+        file("src/other/java/com/foo/Other.${language.name}") << "package com.foo; public class Other {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/other/java/com/foo/Other.java").text = "package com.foo; public class Other { String change; }"
-        run "compileJava"
+        file("src/other/java/com/foo/Other.${language.name}").text = "package com.foo; public class Other { String change; }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("Other", "Main")
     }
 
     def "recompilation does not process removed classes from dependent sourceSet"() {
-        def unusedClass = java("public class Unused {}")
+        def unusedClass = source("public class Unused {}")
         // Need another class or :compileJava will always be considered UP-TO-DATE
-        java("public class Other {}")
+        source("public class Other {}")
 
-        file("src/test/java/BazTest.java") << "public class BazTest {}"
+        file("src/test/java/BazTest.${language.name}") << "public class BazTest {}"
 
         outputs.snapshot { run "compileTestJava" }
 
         when:
-        file("src/test/java/BazTest.java").text = "public class BazTest { String change; }"
+        file("src/test/java/BazTest.${language.name}").text = "public class BazTest { String change; }"
         unusedClass.delete()
 
         run "compileTestJava"
@@ -486,17 +488,17 @@ sourceSets {
     }
 
     def "detects changes to source in extra source directories"() {
-        buildFile << "sourceSets.main.java.srcDir 'extra-java'"
+        buildFile << "sourceSets.main.${language.name}.srcDir 'extra-java'"
 
-        java("class A extends B {}")
-        file("extra-java/B.java") << "class B {}"
-        file("extra-java/C.java") << "class C {}"
+        source("class A extends B {}")
+        file("extra-java/B.${language.name}") << "class B {}"
+        file("extra-java/C.${language.name}") << "class C {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("extra-java/B.java").text = "class B { String change; }"
-        run "compileJava"
+        file("extra-java/B.${language.name}").text = "class B { String change; }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("B", "A")
@@ -506,15 +508,15 @@ sourceSets {
         given:
         buildFile << "compileJava.source $method('extra-java')"
 
-        java("class B {}")
-        file("extra-java/A.java") << "class A extends B {}"
-        file("extra-java/C.java") << "class C {}"
+        source("class B {}")
+        file("extra-java/A.${language.name}") << "class A extends B {}"
+        file("extra-java/C.${language.name}") << "class C {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java("class B { String change; } ")
-        run "compileJava"
+        source("class B { String change; } ")
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("B", "A")
@@ -528,15 +530,15 @@ sourceSets {
     def "detects changes to source in extra source directory provided as #type"() {
         buildFile << "compileJava.source $method('extra-java')"
 
-        java("class A extends B {}")
-        file("extra-java/B.java") << "class B {}"
-        file("extra-java/C.java") << "class C {}"
+        source("class A extends B {}")
+        file("extra-java/B.${language.name}") << "class B {}"
+        file("extra-java/C.${language.name}") << "class C {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("extra-java/B.java").text = "class B { String change; }"
-        run "compileJava"
+        file("extra-java/B.${language.name}").text = "class B { String change; }"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("B", "A")
@@ -550,18 +552,18 @@ sourceSets {
     def "reports source type that does not support detection of source root"() {
         buildFile << "compileJava.source([file('extra-java'), file('other'), file('text-file.txt')])"
 
-        java("class A extends B {}")
-        file("extra-java/B.java") << "class B {}"
-        file("extra-java/C.java") << "class C {}"
+        source("class A extends B {}")
+        file("extra-java/B.${language.name}") << "class B {}"
+        file("extra-java/C.${language.name}") << "class C {}"
         def textFile = file('text-file.txt')
         textFile.text = "text file as root"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("extra-java/B.java").text = "class B { String change; }"
+        file("extra-java/B.${language.name}").text = "class B { String change; }"
         executer.withArgument "--info"
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("A", "B", "C")
@@ -578,16 +580,16 @@ sourceSets {
                 ])
             }"""
 
-        java("class A extends B {}")
-        java("class B {}")
-        java("class C {}")
+        source("class A extends B {}")
+        source("class B {}")
+        source("class C {}")
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        java("class B { String change; }")
+        source("class B { String change; }")
         executer.withArgument "--info"
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses("A", "B")
@@ -596,20 +598,20 @@ sourceSets {
     def "can remove source root"() {
         def toBeRemoved = file("to-be-removed")
         buildFile << """
-            compileJava {
+            ${language.getCompileTaskName()} {
                 source([fileTree('to-be-removed')])
             }"""
 
-        java("class A extends B {}")
-        java("class B {}")
-        toBeRemoved.file("C.java").text = "class C {}"
+        source("class A extends B {}")
+        source("class B {}")
+        toBeRemoved.file("C.${language.name}").text = "class C {}"
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
         toBeRemoved.deleteDir()
         executer.withArgument "--info"
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         outputs.recompiledClasses()
@@ -617,32 +619,32 @@ sourceSets {
 
     def "handles duplicate class across source directories"() {
         //compiler does not allow this scenario, documenting it here
-        buildFile << "sourceSets.main.java.srcDir 'java'"
+        buildFile << "sourceSets.main.${language.name}.srcDir 'java'"
 
-        java("class A {}")
-        file("java/A.java") << "class A {}"
+        source("class A {}")
+        file("java/A.${language.name}") << "class A {}"
 
         when:
-        fails "compileJava"
+        fails language.compileTaskName
         then:
         failure.assertHasCause("Compilation failed")
     }
 
     @Issue("GRADLE-3426")
     def "supports Java 1.2 dependencies"() {
-        java "class A {}"
+        source "class A {}"
 
         buildFile << """
         ${jcenterRepository()}
 dependencies { implementation 'com.ibm.icu:icu4j:2.6.1' }
 """
         expect:
-        succeeds "compileJava"
+        succeeds language.compileTaskName
     }
 
     @Issue("GRADLE-3426")
     def "fully recompiles when a non-analyzable jar is changed"() {
-        def a =  java """
+        def a =  source """
             import com.ibm.icu.util.Calendar;
             class A {
                 Calendar cal;
@@ -656,32 +658,32 @@ dependencies { implementation 'com.ibm.icu:icu4j:2.6.1' }
             }
 
         """
-        succeeds "compileJava", "-PwithIcu"
+        succeeds language.compileTaskName, "-PwithIcu"
 
         when:
         a.text = "class A {}"
 
         then:
-        succeeds "compileJava", "--info"
+        succeeds language.compileTaskName, "--info"
         outputContains("Full recompilation is required because LocaleElements_zh__PINYIN.class could not be analyzed for incremental compilation.")
     }
 
     @Issue("GRADLE-3495")
     def "supports Java 1.1 dependencies"() {
-        java "class A {}"
+        source "class A {}"
 
         buildFile << """
 ${jcenterRepository()}
 dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 """
         expect:
-        run "compileJava"
+        run language.compileTaskName
     }
 
     @Unroll("detects changes to class referenced through a #modifier field")
     def "detects changes to class referenced through a field"() {
         given:
-        java """class A {
+        source """class A {
     $modifier B b;
     void doSomething() {
         Runnable r = b;
@@ -690,11 +692,11 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 }"""
         java '''abstract class B implements Runnable { }'''
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/main/java/B.java").text = "class B { }"
-        fails "compileJava"
+        file("src/main/${language.name}/B.${language.name}").text = "class B { }"
+        fails language.compileTaskName
 
         then:
         failure.assertHasErrorOutput 'Runnable r = b;'
@@ -706,7 +708,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
     @Unroll("detects changes to class referenced through a #modifier array field")
     def "detects changes to class referenced through an array field"() {
         given:
-        java """class A {
+        source """class A {
     $modifier B[] b;
     void doSomething() {
         Runnable r = b[0];
@@ -715,11 +717,11 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 }"""
         java '''abstract class B implements Runnable { }'''
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/main/java/B.java").text = "class B { }"
-        fails "compileJava"
+        file("src/main/${language.name}/B.${language.name}").text = "class B { }"
+        fails language.compileTaskName
 
         then:
         failure.assertHasErrorOutput 'Runnable r = b[0];'
@@ -731,7 +733,7 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
     @Unroll("detects changes to class referenced through a #modifier multi-dimensional array field")
     def "detects changes to class referenced through an multi-dimensional array field"() {
         given:
-        java """class A {
+        source """class A {
     $modifier B[][] b;
     void doSomething() {
         Runnable r = b[0][0];
@@ -740,11 +742,11 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 }"""
         java '''abstract class B implements Runnable { }'''
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/main/java/B.java").text = "class B { }"
-        fails "compileJava"
+        file("src/main/${language.name}/B.${language.name}").text = "class B { }"
+        fails language.compileTaskName
 
         then:
         failure.assertHasErrorOutput 'Runnable r = b[0][0];'
@@ -763,11 +765,11 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 }'''
         java '''abstract class B implements Runnable { }'''
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/main/java/B.java").text = "class B { }"
-        fails "compileJava"
+        file("src/main/${language.name}/B.${language.name}").text = "class B { }"
+        fails language.compileTaskName
 
         then:
         failure.assertHasErrorOutput 'Runnable r = (B) b;'
@@ -785,11 +787,11 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 }'''
         java '''abstract class B implements Runnable { }'''
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/main/java/B.java").text = "class B { }"
-        fails "compileJava"
+        file("src/main/${language.name}/B.${language.name}").text = "class B { }"
+        fails language.compileTaskName
 
         then:
         failure.assertHasErrorOutput 'Runnable r = b();'
@@ -806,11 +808,11 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 }'''
         java '''abstract class B implements Runnable { }'''
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/main/java/B.java").text = "class B { }"
-        fails "compileJava"
+        file("src/main/${language.name}/B.${language.name}").text = "class B { }"
+        fails language.compileTaskName
 
         then:
         failure.assertHasErrorOutput 'Runnable r = b;'
@@ -829,11 +831,11 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 }'''
         java '''abstract class B implements Runnable { }'''
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/main/java/B.java").text = "class B { }"
-        fails "compileJava"
+        file("src/main/${language.name}/B.${language.name}").text = "class B { }"
+        fails language.compileTaskName
 
         then:
         failure.assertHasErrorOutput 'Runnable r = b;'
@@ -853,11 +855,11 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 }'''
         java '''abstract class B implements Runnable { }'''
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/main/java/B.java").text = "class B { }"
-        fails "compileJava"
+        file("src/main/${language.name}/B.${language.name}").text = "class B { }"
+        fails language.compileTaskName
 
         then:
         failure.assertHasErrorOutput 'Runnable r = b;'
@@ -876,11 +878,11 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 }'''
         java '''abstract class B implements Runnable { }'''
 
-        outputs.snapshot { run "compileJava" }
+        outputs.snapshot { run language.compileTaskName }
 
         when:
-        file("src/main/java/B.java").text = "class B { }"
-        fails "compileJava"
+        file("src/main/${language.name}/B.${language.name}").text = "class B { }"
+        fails language.compileTaskName
 
         then:
         failure.assertHasErrorOutput 'Runnable r = b;'
@@ -888,20 +890,20 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 
     def "deletes empty packages dirs"() {
         given:
-        def a = file('src/main/java/com/foo/internal/A.java') << """
+        def a = file('src/main/${language.name}/com/foo/internal/A.${language.name}') << """
             package com.foo.internal;
             public class A {}
         """
-        file('src/main/java/com/bar/B.java') << """
+        file('src/main/${language.name}/com/bar/B.${language.name}') << """
             package com.bar;
             public class B {}
         """
 
-        succeeds "compileJava"
+        succeeds language.compileTaskName
         a.delete()
 
         when:
-        succeeds "compileJava"
+        succeeds language.compileTaskName
 
         then:
         ! file("build/classes/java/main/com/foo").exists()
@@ -909,68 +911,68 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 
     def "recompiles types whose names look like inne classes even if they aren't"() {
         given:
-        file('src/main/java/Test.java') << 'public class Test{}'
-        file('src/main/java/Test$$InnerClass.java') << 'public class Test$$InnerClass{}'
+        file('src/main/${language.name}/Test.${language.name}') << 'public class Test{}'
+        file('src/main/${language.name}/Test$$InnerClass.${language.name}') << 'public class Test$$InnerClass{}'
         buildFile << '''
             apply plugin: 'java'
         '''.stripIndent()
 
         when:
-        succeeds ':compileJava'
+        succeeds ":${language.compileTaskName}"
 
         then:
-        executedAndNotSkipped ':compileJava'
+        executedAndNotSkipped ":${language.compileTaskName}"
         file('build/classes/java/main/Test.class').assertExists()
         file('build/classes/java/main/Test$$InnerClass.class').assertExists()
 
         when:
-        file('src/main/java/Test.java').text = 'public class Test{ void foo() {} }'
-        succeeds ':compileJava'
+        file('src/main/${language.name}/Test.${language.name}').text = 'public class Test{ void foo() {} }'
+        succeeds ":${language.compileTaskName}"
 
         then:
-        executedAndNotSkipped ':compileJava'
+        executedAndNotSkipped ":${language.compileTaskName}"
         file('build/classes/java/main/Test.class').assertExists()
         file('build/classes/java/main/Test$$InnerClass.class').assertExists()
     }
 
     def "incremental java compilation ignores empty packages"() {
         given:
-        file('src/main/java/org/gradle/test/MyTest.java').text = """
+        file('src/main/${language.name}/org/gradle/test/MyTest.${language.name}').text = """
             package org.gradle.test;
             
             class MyTest {}
         """
 
         when:
-        run 'compileJava'
+        run language.compileTaskName
         then:
-        executedAndNotSkipped(':compileJava')
+        executedAndNotSkipped(":${language.compileTaskName}")
 
         when:
-        file('src/main/java/org/gradle/different').createDir()
-        run('compileJava')
+        file('src/main/${language.name}/org/gradle/different').createDir()
+        run(language.compileTaskName)
 
         then:
-        skipped(':compileJava')
+        skipped(":${language.compileTaskName}")
     }
 
     @Requires(TestPrecondition.JDK9_OR_LATER)
     def "recompiles when module info changes"() {
         given:
-        java("""
+        source("""
             import java.util.logging.Logger;
             class Foo {
                 Logger logger;
             }
         """)
-        def moduleInfo = file("src/main/java/module-info.java")
+        def moduleInfo = file("src/main/${language.name}/module-info.${language.name}")
         moduleInfo.text = """
             module foo {
                 requires java.logging;
             }
         """
 
-        succeeds'compileJava'
+        succeedslanguage.compileTaskName
 
         when:
         moduleInfo.text = """
@@ -979,25 +981,25 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         """
 
         then:
-        fails'compileJava'
+        failslanguage.compileTaskName
         result.assertHasErrorOutput("package java.util.logging is not visible")
     }
 
     def "recompiles all classes in a package if the package-info file changes"() {
         given:
-        def packageFile = file("src/main/java/foo/package-info.java")
+        def packageFile = file("src/main/${language.name}/foo/package-info.${language.name}")
         packageFile.text = """package foo;"""
-        file("src/main/java/foo/A.java").text = "package foo; class A {}"
-        file("src/main/java/foo/B.java").text = "package foo; public class B {}"
-        file("src/main/java/foo/bar/C.java").text = "package foo.bar; class C {}"
-        file("src/main/java/baz/D.java").text = "package baz; class D {}"
-        file("src/main/java/baz/E.java").text = "package baz; import foo.B; class E extends B {}"
+        file("src/main/${language.name}/foo/A.${language.name}").text = "package foo; class A {}"
+        file("src/main/${language.name}/foo/B.${language.name}").text = "package foo; public class B {}"
+        file("src/main/${language.name}/foo/bar/C.${language.name}").text = "package foo.bar; class C {}"
+        file("src/main/${language.name}/baz/D.${language.name}").text = "package baz; class D {}"
+        file("src/main/${language.name}/baz/E.${language.name}").text = "package baz; import foo.B; class E extends B {}"
 
-        outputs.snapshot { succeeds 'compileJava' }
+        outputs.snapshot { succeeds language.compileTaskName }
 
         when:
         packageFile.text = """@Deprecated package foo;"""
-        succeeds 'compileJava'
+        succeeds language.compileTaskName
 
         then:
         outputs.recompiledClasses("A", "B", "E", "package-info")
@@ -1009,18 +1011,18 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
         buildFile << """
             compileJava.options.headerOutputDirectory = file("build/headers/java/main")
         """
-        def source = java("""class Foo {
+        def source = source("""class Foo {
             public native void foo();
         }""")
-        java("""class Bar {
+        source("""class Bar {
             public native void bar();
         }""")
 
-        succeeds "compileJava"
+        succeeds language.compileTaskName
 
         when:
         source.delete()
-        succeeds "compileJava"
+        succeeds language.compileTaskName
 
         then:
         file("build/headers/java/main/Foo.h").assertDoesNotExist()
@@ -1029,25 +1031,25 @@ dependencies { implementation 'net.sf.ehcache:ehcache:2.10.2' }
 
     def "recompiles all dependents when no jar analysis is present"() {
         given:
-        java """class A {
+        source """class A {
             com.google.common.base.Splitter splitter;
         }"""
-        java """class B {}"""
+        source """class B {}"""
 
         buildFile << """
         ${jcenterRepository()}
 dependencies { implementation 'com.google.guava:guava:21.0' }
 """
-        outputs.snapshot { succeeds 'compileJava' }
+        outputs.snapshot { succeeds language.compileTaskName }
 
         when:
         executer.requireOwnGradleUserHomeDir()
-        java """class B {
+        source """class B {
             //some change
         }"""
 
         then:
-        succeeds "compileJava"
+        succeeds language.compileTaskName
         outputs.recompiledClasses("A", "B")
     }
 
@@ -1056,18 +1058,18 @@ dependencies { implementation 'com.google.guava:guava:21.0' }
         buildFile << """
             compileJava.inputs.dir 'src/main/resources'
         """
-        java("class A {}")
-        java("class B {}")
+        source("class A {}")
+        source("class B {}")
         def resource = file("src/main/resources/foo.txt")
         resource.text = 'foo'
 
-        outputs.snapshot { succeeds 'compileJava' }
+        outputs.snapshot { succeeds language.compileTaskName }
 
         when:
         resource.text = 'bar'
 
         then:
-        succeeds 'compileJava'
+        succeeds language.compileTaskName
         outputs.noneRecompiled()
     }
 }

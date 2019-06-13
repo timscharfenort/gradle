@@ -16,5 +16,8 @@
 
 package org.gradle.java.compile.incremental
 
-class JavaSourceIncrementalCompilationIntegrationTest {
+import org.gradle.integtests.fixtures.CompiledLanguage
+
+class JavaSourceIncrementalCompilationIntegrationTest extends AbstractSourceIncrementalCompilationIntegrationTest {
+    CompiledLanguage language = CompiledLanguage.JAVA
 }

@@ -28,7 +28,7 @@ class SourceClassesMappingFileAccessorTest extends Specification {
 
     def 'can write then read mapping file'() {
         given:
-        Multimap<File, String> mapping = MultimapBuilder.ListMultimapBuilder
+        Multimap<File, String> mapping = MultimapBuilder.SetMultimapBuilder
             .hashKeys()
             .arrayListValues()
             .build()

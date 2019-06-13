@@ -20,6 +20,7 @@ package org.gradle.java.compile.incremental
 import groovy.transform.NotYetImplemented
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.CompilationOutputsFixture
+import org.gradle.integtests.fixtures.CompiledLanguage
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 import spock.lang.Issue
@@ -28,13 +29,15 @@ import spock.lang.Unroll
 abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extends AbstractIntegrationSpec {
 
     CompilationOutputsFixture impl
+    
+    abstract CompiledLanguage getLanguage() 
 
     def setup() {
         impl = new CompilationOutputsFixture(file("impl/build/classes"))
 
         buildFile << """
             subprojects {
-                apply plugin: 'java-library'
+                apply plugin: '${language == CompiledLanguage.JAVA ? 'java-library' : 'groovy'}'
                 ${mavenCentralRepository()}
             }
             $projectDependencyBlock
@@ -46,13 +49,13 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
 
     protected abstract void addDependency(String from, String to)
 
-    private File java(Map projectToClassBodies) {
+    private File source(Map projectToClassBodies) {
         File out
         projectToClassBodies.each { project, bodies ->
             bodies.each { body ->
                 def className = (body =~ /(?s).*?(?:class|interface) (\w+) .*/)[0][1]
                 assert className: "unable to find class name"
-                def f = file("$project/src/main/java/${className}.java")
+                def f = file("$project/src/main/${language.name}/${className}.${language.name}")
                 f.createFile()
                 f.text = body
                 out = f
@@ -62,12 +65,12 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     }
 
     def "detects changed class in an upstream project"() {
-        java api: ["class A {}", "class B {}"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B {}"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class A { String change; }"]
-        run "impl:compileJava"
+        source api: ["class A { String change; }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses("ImplA")
@@ -79,14 +82,14 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
         """
         addDependency("app", "impl")
         def app = new CompilationOutputsFixture(file("app/build/classes"))
-        java api: ["class A {}"]
-        java impl: ["class B extends A {}"]
-        java app: ["class Unrelated {}", "class C extends B {}", "class D extends C {}"]
-        app.snapshot { run "compileJava" }
+        source api: ["class A {}"]
+        source impl: ["class B extends A {}"]
+        source app: ["class Unrelated {}", "class C extends B {}", "class D extends C {}"]
+        app.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class A { String change; }"]
-        run "app:compileJava"
+        source api: ["class A { String change; }"]
+        run "app:${language.compileTaskName}"
 
         then:
         app.recompiledClasses("C", "D")
@@ -98,14 +101,14 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
         """
         addDependency("app", "impl")
         def app = new CompilationOutputsFixture(file("app/build/classes"))
-        java api: ["class A {}"]
-        java impl: ["class B { public A a;}"]
-        java app: ["class Unrelated {}", "class C { public B b; }"]
-        app.snapshot { run "compileJava" }
+        source api: ["class A {}"]
+        source impl: ["class B { public A a;}"]
+        source app: ["class Unrelated {}", "class C { public B b; }"]
+        app.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class A { String change; }"]
-        run "app:compileJava"
+        source api: ["class A { String change; }"]
+        run "app:${language.compileTaskName}"
 
         then:
         app.recompiledClasses("C")
@@ -117,18 +120,18 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
         """
         addDependency("app", "impl")
         def app = new CompilationOutputsFixture(file("app/build/classes"))
-        java api: ["class A {}"]
-        java impl: ["class B { public A a;}"]
-        java app: ["class Unrelated {}", "class C { public B b; }"]
+        source api: ["class A {}"]
+        source impl: ["class B { public A a;}"]
+        source app: ["class Unrelated {}", "class C { public B b; }"]
         app.snapshot {
             impl.snapshot {
-                run "compileJava"
+                run language.compileTaskName
             }
         }
 
         when:
-        file("api/src/main/java/A.java").delete()
-        run "app:compileJava", "-x", "impl:compileJava"
+        file("api/src/main/${language.name}/A.${language.name}").delete()
+        run "app:${language.compileTaskName}", "-x", "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
@@ -136,8 +139,8 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     }
 
     def "deletion of jar without dependents does not recompile any classes"() {
-        java api: ["class A {}"], impl: ["class SomeImpl {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}"], impl: ["class SomeImpl {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
         buildFile << """
@@ -145,15 +148,15 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
                 configurations.api.dependencies.clear() //so that api jar is no longer on classpath
             }
         """
-        run "impl:compileJava"
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
     }
 
     def "deletion of jar with dependents causes compilation failure"() {
-        java api: ["class A {}"], impl: ["class ImplA extends A {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}"], impl: ["class ImplA extends A {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
         buildFile << """
@@ -161,53 +164,53 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
                 configurations.api.dependencies.clear() //so that api jar is no longer on classpath
             }
         """
-        fails "impl:compileJava"
+        fails "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
     }
 
     def "detects change to dependency and ensures class dependency info refreshed"() {
-        java api: ["class A {}", "class B extends A {}"]
-        java impl: ["class SomeImpl {}", "class ImplB extends B {}", "class ImplB2 extends ImplB {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B extends A {}"]
+        source impl: ["class SomeImpl {}", "class ImplB extends B {}", "class ImplB2 extends ImplB {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { /* remove extends */ }"]
-        run "impl:compileJava"
+        source api: ["class B { /* remove extends */ }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses("ImplB", "ImplB2")
 
         when:
         impl.snapshot()
-        java api: ["class A { /* change */ }"]
-        run "impl:compileJava"
+        source api: ["class A { /* change */ }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled() //because after earlier change to B, class A is no longer a dependency
     }
 
     def "detects deleted class in an upstream project and fails compilation"() {
-        def b = java(api: ["class A {}", "class B {}"])
-        java impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        impl.snapshot { run "compileJava" }
+        def b = source(api: ["class A {}", "class B {}"])
+        source impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
         assert b.delete()
-        fails "impl:compileJava"
+        fails "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
     }
 
     def "recompilation not necessary when upstream does not change any of the actual dependencies"() {
-        java api: ["class A {}", "class B {}"], impl: ["class ImplA extends A {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B {}"], impl: ["class ImplA extends A {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { String change; }"]
-        run "impl:compileJava"
+        source api: ["class B { String change; }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
@@ -216,8 +219,8 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     @NotYetImplemented
     //  Can re-enable with compiler plugins. See gradle/gradle#1474
     def "deletion of jar with non-private constant causes rebuild if constant is used"() {
-        java api: ["class A { public final static int x = 1; }"], impl: ["class X { int x() { return 1;} }", "class Y {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A { public final static int x = 1; }"], impl: ["class X { int x() { return 1;} }", "class Y {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
         buildFile << """
@@ -225,7 +228,7 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
                 configurations.api.dependencies.clear() //so that api jar is no longer on classpath
             }
         """
-        run "impl:compileJava"
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses("X")
@@ -234,12 +237,12 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     @NotYetImplemented
     //  Can re-enable with compiler plugins. See gradle/gradle#1474
     def "changing an unused non-private constant doesn't cause full rebuild"() {
-        java api: ["class A {}", "class B { final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B { final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { /* change */ }"]
-        run "impl:compileJava"
+        source api: ["class B { /* change */ }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses('ImplB')
@@ -247,12 +250,12 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
 
     // This test describes the current behavior, not the intended one, expressed by the test just above
     def "changing an unused non-private constant causes full rebuild"() {
-        java api: ["class A {}", "class B { final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B { final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { /* change */ }"]
-        run "impl:compileJava"
+        source api: ["class B { /* change */ }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses('ImplA', 'ImplB')
@@ -260,12 +263,12 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
 
     @Unroll
     def "change in an upstream class with non-private constant causes rebuild if same constant is used (#constantType)"() {
-        java api: ["class A {}", "class B { final static $constantType x = $constantValue; }"], impl: ["class ImplA extends A { $constantType foo() { return $constantValue; }}", "class ImplB {int foo() { return 2; }}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B { final static $constantType x = $constantValue; }"], impl: ["class ImplA extends A { $constantType foo() { return $constantValue; }}", "class ImplB {int foo() { return 2; }}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { /* change */ }"]
-        run "impl:compileJava"
+        source api: ["class B { /* change */ }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         // impl.recompiledClasses('ImplA') //  Can re-enable with compiler plugins. See gradle/gradle#1474
@@ -288,12 +291,12 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     @NotYetImplemented
     //  Can re-enable with compiler plugins. See gradle/gradle#1474
     def "change in an upstream class with non-private constant causes rebuild only if same constant is used and no direct dependency (#constantType)"() {
-        java api: ["class A {}", "class B { final static $constantType x = $constantValue; }"], impl: ["class X { $constantType foo() { return $constantValue; }}", "class Y {int foo() { return -2; }}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B { final static $constantType x = $constantValue; }"], impl: ["class X { $constantType foo() { return $constantValue; }}", "class Y {int foo() { return -2; }}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { /* change */ }"]
-        run "impl:compileJava"
+        source api: ["class B { /* change */ }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses('X')
@@ -315,12 +318,12 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     @NotYetImplemented
     //  Can re-enable with compiler plugins. See gradle/gradle#1474
     def "constant value change in an upstream class causes rebuild if previous constant value was used in previous build (#constantType)"() {
-        java api: ["class A {}", "class B { final static $constantType x = $constantValue; }"], impl: ["class X { $constantType foo() { return $constantValue; }}", "class Y {int foo() { return -2; }}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B { final static $constantType x = $constantValue; }"], impl: ["class X { $constantType foo() { return $constantValue; }}", "class Y {int foo() { return -2; }}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { final static $constantType x = $newValue; /* change value */ ; void blah() { /* avoid flakiness by changing compiled file length*/ } }"]
-        run "impl:compileJava"
+        source api: ["class B { final static $constantType x = $newValue; /* change value */ ; void blah() { /* avoid flakiness by changing compiled file length*/ } }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses('X')
@@ -341,76 +344,76 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     @NotYetImplemented
     //  Can re-enable with compiler plugins. See gradle/gradle#1474
     def "ignores irrelevant changes to constant values"() {
-        java api: ["class A {}", "class B { final static int x = 3; final static int y = -2; }"],
+        source api: ["class A {}", "class B { final static int x = 3; final static int y = -2; }"],
             impl: ["class X { int foo() { return 3; }}", "class Y {int foo() { return -2; }}"]
-        impl.snapshot { run "compileJava" }
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { final static int x = 3 ; final static int y = -3;  void blah() { /*  change irrelevant to constant value x */ } }"]
-        run "impl:compileJava"
+        source api: ["class B { final static int x = 3 ; final static int y = -3;  void blah() { /*  change irrelevant to constant value x */ } }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses('Y')
     }
 
     def "recompiles in case of conflicting changing constant values"() {
-        java api: ["class A { final static int x = 3; }", "class B { final static int x = 3; final static int y = -2; }"],
+        source api: ["class A { final static int x = 3; }", "class B { final static int x = 3; final static int y = -2; }"],
             impl: ["class X { int foo() { return 3; }}", "class Y {int foo() { return -2; }}"]
-        impl.snapshot { run "compileJava" }
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { final static int x = 3 ; final static int y = -3;  void blah() { /*  change irrelevant to constant value x */ } }"]
-        java api: ["class A { final static int x = 2 ; final static int y = -2;  void blah() { /*  change irrelevant to constant value y */ } }"]
-        run "impl:compileJava"
+        source api: ["class B { final static int x = 3 ; final static int y = -3;  void blah() { /*  change irrelevant to constant value x */ } }"]
+        source api: ["class A { final static int x = 2 ; final static int y = -2;  void blah() { /*  change irrelevant to constant value y */ } }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses('X', 'Y')
     }
 
     def "change in an upstream transitive class with non-private constant does not cause full rebuild"() {
-        java api: ["class A { final static int x = 1; }", "class B extends A {}"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A { final static int x = 1; }", "class B extends A {}"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { /* change */ }"]
-        run "impl:compileJava"
+        source api: ["class B { /* change */ }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses('ImplB')
     }
 
     def "private constant in upstream project does not trigger full rebuild"() {
-        java api: ["class A {}", "class B { private final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B { private final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class B { /* change */ }"]
-        run "impl:compileJava"
+        source api: ["class B { /* change */ }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
     }
 
     def "addition of unused class in upstream project does not rebuild"() {
-        java api: ["class A {}", "class B { private final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B { private final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class C { }"]
-        run "impl:compileJava"
+        source api: ["class C { }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
     }
 
     def "removal of unused class in upstream project does not rebuild"() {
-        java api: ["class A {}", "class B { private final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        def c =  java api: ["class C { }"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B { private final static int x = 1; }"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        def c =  source api: ["class C { }"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
         c.delete()
-        run "impl:compileJava"
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
@@ -425,63 +428,63 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
                 dependencies { implementation 'org.apache.commons:commons-lang3:3.3' }
             }
         """
-        java api: ["class A {}", "class B { }"], impl: ["class ImplA extends A {}", """import org.apache.commons.lang3.StringUtils;
+        source api: ["class A {}", "class B { }"], impl: ["class ImplA extends A {}", """import org.apache.commons.lang3.StringUtils;
 
             class ImplB extends B { 
                public static String HELLO = StringUtils.capitalize("hello"); 
             }"""]
-        impl.snapshot { run "compileJava" }
+        impl.snapshot { run language.compileTaskName }
 
         when:
         buildFile.text = buildFile.text.replace('3.3', '3.3.1')
-        run 'impl:compileJava'
+        run 'impl:${language.compileTaskName}'
 
         then:
         impl.noneRecompiled()
     }
 
     def "detects changed classes when upstream project was built in isolation"() {
-        java api: ["class A {}", "class B {}"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B {}"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class A { String change; }"]
-        run "api:compileJava"
-        run "impl:compileJava"
+        source api: ["class A { String change; }"]
+        run "api:${language.compileTaskName}"
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses("ImplA")
     }
 
     def "detects class changes in subsequent runs ensuring the jar snapshots are refreshed"() {
-        java api: ["class A {}", "class B {}"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}", "class B {}"], impl: ["class ImplA extends A {}", "class ImplB extends B {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class A { String change; }"]
-        run "api:compileJava"
-        run "impl:compileJava" //different build invocation
+        source api: ["class A { String change; }"]
+        run "api:${language.compileTaskName}"
+        run "impl:${language.compileTaskName}" //different build invocation
 
         then:
         impl.recompiledClasses("ImplA")
 
         when:
         impl.snapshot()
-        java api: ["class B { String change; }"]
-        run "compileJava"
+        source api: ["class B { String change; }"]
+        run language.compileTaskName
 
         then:
         impl.recompiledClasses("ImplB")
     }
 
     def "changes to resources in jar do not incur recompilation"() {
-        java impl: ["class A {}"]
-        impl.snapshot { run "impl:compileJava" }
+        source impl: ["class A {}"]
+        impl.snapshot { run "impl:${language.compileTaskName}" }
 
         when:
         file("api/src/main/resources/some-resource.txt") << "xxx"
-        java api: ["class A { String change; }"]
-        run "impl:compileJava"
+        source api: ["class A { String change; }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
@@ -489,35 +492,35 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
 
     def "handles multiple compile tasks in the same project"() {
         settingsFile << "\n include 'other'" //add an extra project
-        java impl: ["class ImplA extends A {}"], api: ["class A {}"], other: ["class Other {}"]
+        source impl: ["class ImplA extends A {}"], api: ["class A {}"], other: ["class Other {}"]
 
-        //new separate compile task (compileIntegTestJava) depends on class from the extra project
+        //new separate compile task (compileIntegTest${language.captalizedName}) depends on class from the extra project
         file("impl/build.gradle") << """
-            sourceSets { integTest.java.srcDir 'src/integTest/java' }
+            sourceSets { integTest.${language.name}.srcDir "src/integTest/${language.name}" }
             dependencies { integTestImplementation project(":other") }
         """
-        file("impl/src/integTest/java/SomeIntegTest.java") << "class SomeIntegTest extends Other {}"
+        file("impl/src/integTest/java/SomeIntegTest.${language.name}") << "class SomeIntegTest extends Other {}"
 
-        impl.snapshot { run "compileIntegTestJava", "compileJava" }
+        impl.snapshot { run "compileIntegTest${language.capitalizedName}", language.compileTaskName }
 
         when: //when api class is changed
-        java api: ["class A { String change; }"]
-        run "compileIntegTestJava", "compileJava"
+        source api: ["class A { String change; }"]
+        run "compileIntegTest${language.capitalizedName}", language.compileTaskName
 
         then: //only impl class is recompiled
         impl.recompiledClasses("ImplA")
 
         when: //when other class is changed
         impl.snapshot()
-        java other: ["class Other { String change; }"]
-        run "compileIntegTestJava", "compileJava"
+        source other: ["class Other { String change; }"]
+        run "compileIntegTest${language.capitalizedName}", language.compileTaskName
 
         then: //only integTest class is recompiled
         impl.recompiledClasses("SomeIntegTest")
     }
 
     def "the order of classpath items is unchanged"() {
-        java api: ["class A {}"], impl: ["class B {}"]
+        source api: ["class A {}"], impl: ["class B {}"]
         file("impl/build.gradle") << """
             dependencies { implementation "org.mockito:mockito-core:1.9.5", "junit:junit:4.12" }
             compileJava.doFirst {
@@ -526,48 +529,48 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
         """
 
         when:
-        run("impl:compileJava") //initial run
+        run("impl:${language.compileTaskName}") //initial run
         then:
         file("impl/classpath.txt").text == "api.jar, mockito-core-1.9.5.jar, junit-4.12.jar, hamcrest-core-1.3.jar, objenesis-1.0.jar"
 
         when: //project dependency changes
-        java api: ["class A { String change; }"]
-        run("impl:compileJava")
+        source api: ["class A { String change; }"]
+        run("impl:${language.compileTaskName}")
 
         then:
         file("impl/classpath.txt").text == "api.jar, mockito-core-1.9.5.jar, junit-4.12.jar, hamcrest-core-1.3.jar, objenesis-1.0.jar"
 
         when: //transitive dependency is excluded
         file("impl/build.gradle") << "configurations.implementation.exclude module: 'hamcrest-core' \n"
-        run("impl:compileJava")
+        run("impl:${language.compileTaskName}")
 
         then:
         file("impl/classpath.txt").text == "api.jar, mockito-core-1.9.5.jar, junit-4.12.jar, objenesis-1.0.jar"
 
         when: //direct dependency is excluded
         file("impl/build.gradle") << "configurations.implementation.exclude module: 'junit' \n"
-        run("impl:compileJava")
+        run("impl:${language.compileTaskName}")
 
         then:
         file("impl/classpath.txt").text == "api.jar, mockito-core-1.9.5.jar, objenesis-1.0.jar"
 
         when: //new dependency is added
         file("impl/build.gradle") << "dependencies { implementation 'org.testng:testng:6.8.7' } \n"
-        run("impl:compileJava")
+        run("impl:${language.compileTaskName}")
 
         then:
         file("impl/classpath.txt").text == "api.jar, mockito-core-1.9.5.jar, testng-6.8.7.jar, objenesis-1.0.jar, bsh-2.0b4.jar, jcommander-1.27.jar, snakeyaml-1.12.jar"
     }
 
     def "handles duplicate class found in jar"() {
-        java api: ["class A extends B {}", "class B {}"], impl: ["class A extends C {}", "class C {}"]
+        source api: ["class A extends B {}", "class B {}"], impl: ["class A extends C {}", "class C {}"]
 
-        impl.snapshot { run("impl:compileJava") }
+        impl.snapshot { run("impl:${language.compileTaskName}") }
 
         when:
         //change to source dependency duplicate triggers recompilation
-        java impl: ["class C { String change; }"]
-        run("impl:compileJava")
+        source impl: ["class C { String change; }"]
+        run("impl:${language.compileTaskName}")
 
         then:
         impl.recompiledClasses("A", "C")
@@ -575,75 +578,75 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
         when:
         //change to jar dependency duplicate is ignored because source duplicate wins
         impl.snapshot()
-        java api: ["class B { String change; } "]
-        run("impl:compileJava")
+        source api: ["class B { String change; } "]
+        run("impl:${language.compileTaskName}")
 
         then:
         impl.noneRecompiled()
     }
 
     def "new jar with duplicate class appearing earlier on classpath must trigger compilation"() {
-        java impl: ["class A extends org.junit.Assert {}"]
+        source impl: ["class A extends org.junit.Assert {}"]
         file("impl/build.gradle") << """
             configurations.api.dependencies.clear()
             dependencies { implementation 'junit:junit:4.12' }
         """
 
-        impl.snapshot { run("impl:compileJava") }
+        impl.snapshot { run("impl:${language.compileTaskName}") }
 
         when:
         //add new jar with duplicate class that will be earlier on the classpath (project dependencies are earlier on classpath)
-        file("api/src/main/java/org/junit/Assert.java") << "package org.junit; public class Assert {}"
+        file("api/src/main/${language.name}/org/junit/Assert.${language.name}") << "package org.junit; public class Assert {}"
         file("impl/build.gradle") << "dependencies { implementation project(':api') }"
-        run("impl:compileJava")
+        run("impl:${language.compileTaskName}")
 
         then:
         impl.recompiledClasses("A")
     }
 
     def "new jar without duplicate class does not trigger compilation"() {
-        java impl: ["class A {}"]
-        impl.snapshot { run("impl:compileJava") }
+        source impl: ["class A {}"]
+        impl.snapshot { run("impl:${language.compileTaskName}") }
 
         when:
         file("impl/build.gradle") << "dependencies { implementation 'junit:junit:4.12' }"
-        run("impl:compileJava")
+        run("impl:${language.compileTaskName}")
 
         then:
         impl.noneRecompiled()
     }
 
     def "changed jar with duplicate class appearing earlier on classpath must trigger compilation"() {
-        java impl: ["class A extends org.junit.Assert {}"]
+        source impl: ["class A extends org.junit.Assert {}"]
         file("impl/build.gradle") << """
             dependencies { implementation 'junit:junit:4.12' }
         """
 
-        impl.snapshot { run("impl:compileJava") }
+        impl.snapshot { run("impl:${language.compileTaskName}") }
 
         when:
         //update existing jar with duplicate class that will be earlier on the classpath (project dependencies are earlier on classpath)
-        file("api/src/main/java/org/junit/Assert.java") << "package org.junit; public class Assert {}"
-        run("impl:compileJava")
+        file("api/src/main/${language.name}/org/junit/Assert.${language.name}") << "package org.junit; public class Assert {}"
+        run("impl:${language.compileTaskName}")
 
         then:
         impl.recompiledClasses("A")
     }
 
     def "deletion of a jar with duplicate class causes recompilation"() {
-        file("api/src/main/java/org/junit/Assert.java") << "package org.junit; public class Assert {}"
-        java impl: ["class A extends org.junit.Assert {}"]
+        file("api/src/main/${language.name}/org/junit/Assert.${language.name}") << "package org.junit; public class Assert {}"
+        source impl: ["class A extends org.junit.Assert {}"]
 
         file("impl/build.gradle") << "dependencies { implementation 'junit:junit:4.12' }"
 
-        impl.snapshot { run("impl:compileJava") }
+        impl.snapshot { run("impl:${language.compileTaskName}") }
 
         when:
         file("impl/build.gradle").text = """
             configurations.api.dependencies.clear()  //kill project dependency
             dependencies { implementation 'junit:junit:4.11' }  //leave only junit
         """
-        run("impl:compileJava")
+        run("impl:${language.compileTaskName}")
 
         then:
         impl.recompiledClasses("A")
@@ -651,7 +654,7 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
 
     @Unroll
     def "recompiles outermost class when #visibility inner class contains constant reference"() {
-        java api: [
+        source api: [
             "class A { public static final int EVIL = 666; }",
         ], impl: [
             "class B {}",
@@ -661,11 +664,11 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
             "class F { int foo() { return A.EVIL; } $visibility static class Inner { } }",
         ]
 
-        impl.snapshot { run("impl:compileJava") }
+        impl.snapshot { run("impl:${language.compileTaskName}") }
 
         when:
-        java api: ["class A { public static final int EVIL = 0; void blah() { /* avoid flakiness by changing compiled file length*/ } }"]
-        run("impl:compileJava")
+        source api: ["class A { public static final int EVIL = 0; void blah() { /* avoid flakiness by changing compiled file length*/ } }"]
+        run("impl:${language.compileTaskName}")
 
         then:
         impl.recompiledClasses('B', 'C', 'C$Inner', 'D', 'D$Inner', 'E', 'E$1', 'F', 'F$Inner')
@@ -676,7 +679,7 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     }
 
     def "recognizes change of constant value in annotation"() {
-        java api: [
+        source api: [
             "class A { public static final int CST = 0; }",
             """import java.lang.annotation.Retention;
                import java.lang.annotation.RetentionPolicy;
@@ -690,11 +693,11 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
             "class OnParameter { void foo(@B(A.CST) int x) {} }"
         ]
 
-        impl.snapshot { run("impl:compileJava") }
+        impl.snapshot { run("impl:${language.compileTaskName}") }
 
         when:
-        java api: ["class A { public static final int CST = 1234; void blah() { /* avoid flakiness by changing compiled file length*/ } }"]
-        run("impl:compileJava")
+        source api: ["class A { public static final int CST = 1234; void blah() { /* avoid flakiness by changing compiled file length*/ } }"]
+        run("impl:${language.compileTaskName}")
 
         then:
         impl.recompiledClasses("OnClass", "OnMethod", "OnParameter", "OnField")
@@ -702,7 +705,7 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
 
     @Unroll
     def "change to class referenced by an annotation recompiles annotated types"() {
-        java api: [
+        source api: [
             """
                 import java.lang.annotation.*;
                 @Retention(RetentionPolicy.CLASS) 
@@ -718,15 +721,15 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
             "class OnParameter { void foo(@B(A.class) int x) {} }"
         ]
 
-        impl.snapshot { run "compileJava" }
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: [
+        source api: [
             """
                 class A { public void foo() {} }
             """
         ]
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         impl.recompiledClasses("OnClass", "OnMethod", "OnParameter", "OnField")
@@ -734,7 +737,7 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
 
     @Unroll
     def "change to class referenced by an array value in an annotation recompiles annotated types"() {
-        java api: [
+        source api: [
             """
                 import java.lang.annotation.*;
                 @Retention(RetentionPolicy.CLASS) 
@@ -750,15 +753,15 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
             "class OnParameter { void foo(@B(A.class) int x) {} }"
         ]
 
-        impl.snapshot { run "compileJava" }
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: [
+        source api: [
             """
                 class A { public void foo() {} }
             """
         ]
-        run "compileJava"
+        run language.compileTaskName
 
         then:
         impl.recompiledClasses("OnClass", "OnMethod", "OnParameter", "OnField")
@@ -767,19 +770,19 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     @NotYetImplemented
     @Issue("gradle/performance#335")
     def "doesn't destroy class analysis when a compile error occurs"() {
-        java api: ["class A {}"], impl: ["class ImplA extends A {}"]
-        impl.snapshot { run "compileJava" }
+        source api: ["class A {}"], impl: ["class ImplA extends A {}"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class A { compile error }"]
+        source api: ["class A { compile error }"]
 
         then:
-        impl.snapshot { fails "impl:compileJava" }
+        impl.snapshot { fails "impl:${language.compileTaskName}" }
 
         when:
-        java api: ["class A { String foo; }"]
+        source api: ["class A { String foo; }"]
         executer.withArgument("-i")
-        run 'impl:compileJava'
+        run 'impl:${language.compileTaskName}'
 
         then:
         !output.contains('Full recompilation is required because no incremental change information is available. This is usually caused by clean builds or changing compiler arguments.')
@@ -789,26 +792,26 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     @NotYetImplemented
     //  Can re-enable with compiler plugins. See gradle/gradle#1474
     def "only recompiles classes potentially affected by constant change"() {
-        java api: ["class A { public static final int FOO = 10; public static final int BAR = 20; }"],
+        source api: ["class A { public static final int FOO = 10; public static final int BAR = 20; }"],
             impl: ['class B { void foo() { int x = 10; } }', 'class C { void foo() { int x = 20; } }']
-        impl.snapshot { run 'compileJava' }
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ['class A { public static final int FOO = 100; public static final int BAR = 20; }']
-        run 'impl:compileJava'
+        source api: ['class A { public static final int FOO = 100; public static final int BAR = 20; }']
+        run 'impl:${language.compileTaskName}'
 
         then:
         impl.recompiledClasses 'B'
     }
 
     def "recompiles dependent class in case a constant is switched"() {
-        java api: ["class A { public static final int FOO = 10; public static final int BAR = 20; }"],
+        source api: ["class A { public static final int FOO = 10; public static final int BAR = 20; }"],
             impl: ['class B { void foo() { int x = 10; } }', 'class C { void foo() { int x = 20; } }']
-        impl.snapshot { run 'compileJava' }
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ['class A { public static final int FOO = 20; public static final int BAR = 10; }']
-        run 'impl:compileJava'
+        source api: ['class A { public static final int FOO = 20; public static final int BAR = 10; }']
+        run 'impl:${language.compileTaskName}'
 
         then:
         impl.recompiledClasses 'B', 'C'
@@ -816,12 +819,12 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
 
     @Issue("gradle/gradle#1474")
     def "recompiles dependent class in case a constant is computed from another constant"() {
-        java api: ["class A { public static final int FOO = 10; }"], impl: ['class B { public static final int BAR = 2 + A.FOO; } ']
-        impl.snapshot { run 'compileJava' }
+        source api: ["class A { public static final int FOO = 10; }"], impl: ['class B { public static final int BAR = 2 + A.FOO; } ']
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ['class A { public static final int FOO = 100; }']
-        run 'impl:compileJava'
+        source api: ['class A { public static final int FOO = 100; }']
+        run 'impl:${language.compileTaskName}'
 
         then:
         impl.recompiledClasses 'B'
@@ -829,26 +832,26 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     }
 
     def "detects that changed class still has the same constants so no recompile is necessary"() {
-        java api: ["class A { public static final int FOO = 123;}"],
+        source api: ["class A { public static final int FOO = 123;}"],
             impl: ["class B { void foo() { int x = 123; }}"]
-        impl.snapshot { run "compileJava" }
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class A { public static final int FOO = 123; void addSomeRandomMethod() {} }"]
-        run "impl:compileJava"
+        source api: ["class A { public static final int FOO = 123; void addSomeRandomMethod() {} }"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
     }
 
     def "does not recompile on non-abi change across projects"() {
-        java api: ["class A { }"],
+        source api: ["class A { }"],
             impl: ["class B { A a; }", "class C { B b; }"]
-        impl.snapshot { run "compileJava" }
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java api: ["class A { \n}"]
-        run "impl:compileJava"
+        source api: ["class A { \n}"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.noneRecompiled()
@@ -858,12 +861,12 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
     // If all classes are compiled by the same compile task, we do not know if a
     // change is an abi change or not. Hence, an abi change is always assumed.
     def "does recompile on non-abi changes inside one project"() {
-        java impl: ["class A { }", "class B { A a; }", "class C { B b; }"]
-        impl.snapshot { run "compileJava" }
+        source impl: ["class A { }", "class B { A a; }", "class C { B b; }"]
+        impl.snapshot { run language.compileTaskName }
 
         when:
-        java impl: ["class A { \n}"]
-        run "impl:compileJava"
+        source impl: ["class A { \n}"]
+        run "impl:${language.compileTaskName}"
 
         then:
         impl.recompiledClasses 'A', 'B', 'C'
@@ -871,15 +874,15 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
 
     @Requires(TestPrecondition.JDK9_OR_LATER)
     def "recompiles when upstream module-info changes"() {
-        file("api/src/main/java/a/A.java").text = "package a; public class A {}"
-        file("impl/src/main/java/b/B.java").text = "package b; import a.A; class B extends A {}"
-        def moduleInfo = file("api/src/main/java/module-info.java")
+        file("api/src/main/${language.name}/a/A.${language.name}").text = "package a; public class A {}"
+        file("impl/src/main/${language.name}/b/B.${language.name}").text = "package b; import a.A; class B extends A {}"
+        def moduleInfo = file("api/src/main/${language.name}/module-info.${language.name}")
         moduleInfo.text = """
             module api {
                 exports a;
             }
         """
-        file("impl/src/main/java/module-info.java").text = """
+        file("impl/src/main/${language.name}/module-info.${language.name}").text = """
             module impl {
                 requires api;
             }
@@ -890,7 +893,7 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
                 classpath = files()
             }
         """
-        succeeds "impl:compileJava"
+        succeeds "impl:${language.compileTaskName}"
 
         when:
         moduleInfo.text = """
@@ -899,24 +902,24 @@ abstract class AbstractCrossTaskIncrementalJavaCompilationIntegrationTest extend
         """
 
         then:
-        fails "impl:compileJava"
+        fails "impl:${language.compileTaskName}"
         result.hasErrorOutput("package a is not visible")
     }
 
     def "recompiles downstream dependents of classes whose package-info changed"() {
         given:
-        def packageFile = file("api/src/main/java/foo/package-info.java")
+        def packageFile = file("api/src/main/${language.name}/foo/package-info.${language.name}")
         packageFile.text = """package foo;"""
-        file("api/src/main/java/foo/A.java").text = "package foo; public class A {}"
-        file("api/src/main/java/bar/B.java").text = "package bar; public class B {}"
-        file("impl/src/main/java/baz/C.java").text = "package baz; import foo.A; class C extends A {}"
-        file("impl/src/main/java/baz/D.java").text = "package baz; import bar.B; class D extends B {}"
+        file("api/src/main/${language.name}/foo/A.${language.name}").text = "package foo; public class A {}"
+        file("api/src/main/${language.name}/bar/B.${language.name}").text = "package bar; public class B {}"
+        file("impl/src/main/${language.name}/baz/C.${language.name}").text = "package baz; import foo.A; class C extends A {}"
+        file("impl/src/main/${language.name}/baz/D.${language.name}").text = "package baz; import bar.B; class D extends B {}"
 
-        impl.snapshot { succeeds 'impl:compileJava' }
+        impl.snapshot { succeeds 'impl:${language.compileTaskName}' }
 
         when:
         packageFile.text = """@Deprecated package foo;"""
-        succeeds 'impl:compileJava'
+        succeeds 'impl:${language.compileTaskName}'
 
         then:
         impl.recompiledClasses("C")

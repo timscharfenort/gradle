@@ -17,7 +17,10 @@
 
 package org.gradle.java.compile.incremental
 
+import org.gradle.integtests.fixtures.CompiledLanguage
+
 class CrossTaskIncrementalJavaCompilationIntegrationTest extends AbstractCrossTaskIncrementalJavaCompilationIntegrationTest {
+    CompiledLanguage language = CompiledLanguage.JAVA
 
     @Override
     protected String getProjectDependencyBlock() {

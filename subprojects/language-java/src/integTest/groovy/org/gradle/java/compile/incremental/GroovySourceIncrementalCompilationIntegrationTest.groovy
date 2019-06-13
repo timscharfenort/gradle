@@ -18,6 +18,6 @@ package org.gradle.java.compile.incremental
 
 import org.gradle.integtests.fixtures.CompiledLanguage
 
-class JavaSourceIncrementalCompilationIntegrationTest extends AbstractSourceIncrementalCompilationIntegrationTest {
-    CompiledLanguage language = CompiledLanguage.JAVA
+class GroovySourceIncrementalCompilationIntegrationTest extends AbstractSourceIncrementalCompilationIntegrationTest {
+    CompiledLanguage language = CompiledLanguage.GROOVY
 }

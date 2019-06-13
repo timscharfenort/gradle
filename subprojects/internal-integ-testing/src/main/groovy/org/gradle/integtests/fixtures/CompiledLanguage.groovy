@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-package org.gradle.integtests.fixtures;
+package org.gradle.integtests.fixtures
+
+import org.apache.commons.lang3.StringUtils
 
 enum CompiledLanguage {
     JAVA,
@@ -22,6 +24,10 @@ enum CompiledLanguage {
 
     String getName() {
         return name().toLowerCase()
+    }
+
+    String getCapitalizedName() {
+        return StringUtils.capitalize(getName())
     }
 
     String getCompileTaskName() {
