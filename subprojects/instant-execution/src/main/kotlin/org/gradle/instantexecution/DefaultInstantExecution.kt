@@ -261,7 +261,7 @@ class DefaultInstantExecution(
     private
     val reportFile by lazy {
         instantExecutionStateFile.run {
-            File(parentFile, "$nameWithoutExtension.html")
+            resolveSibling("$nameWithoutExtension.html")
         }
     }
 }
