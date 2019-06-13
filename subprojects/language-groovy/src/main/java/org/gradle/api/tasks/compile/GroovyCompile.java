@@ -203,7 +203,7 @@ public class GroovyCompile extends AbstractCompile {
                 cleaningGroovyCompiler,
                 getPath(),
                 getStableSources().getAsFileTree(),
-                (sourceDirs) -> createRecompilationSpecProvider(sourceDirs, inputChanges, sourceClassesMapping)
+                sourceDirs -> createRecompilationSpecProvider(sourceDirs, inputChanges, sourceClassesMapping)
             );
         } else {
             return cleaningGroovyCompiler;
