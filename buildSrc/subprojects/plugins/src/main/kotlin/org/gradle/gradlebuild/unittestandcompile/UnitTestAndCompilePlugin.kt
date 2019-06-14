@@ -275,6 +275,9 @@ open class UnitTestAndCompileExtension(val project: Project) {
             project.java.targetCompatibility = value.compatibility
             project.java.sourceCompatibility = value.compatibility
             project.java.disableAutoTargetJvmGradle53()
+            if (project.hasProperty("noJavaLibraryPlugin")) {
+                project.java.packageClassesFromProjectDependencies()
+            }
         }
 
     init {
