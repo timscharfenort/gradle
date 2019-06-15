@@ -20,17 +20,20 @@ import accessors.groovy
 import accessors.java
 
 import groovy.lang.MissingPropertyException
-import org.gradle.api.internal.artifacts.publish.DefaultPublishArtifact
-import org.gradle.plugins.publish.GeneratePom
 import org.gradle.plugins.publish.createArtifactPattern
-
-import java.util.*
 
 plugins {
     maven
 }
 
-val generatePom = tasks.register("generatePom", GeneratePom::class.java)
+val publishImplementation by configurations.creating
+val publishRuntime by configurations.creating
+
+// Subprojects assign dependencies to publishCompile to indicate that they should be part of the published pom.
+// Therefore implementation needs to contain those dependencies and extend publishImplementation
+configurations.named("implementation") {
+    extendsFrom(publishImplementation)
+}
 
 val main by java.sourceSets
 val sourceJar = tasks.register("sourceJar", Jar::class.java) {
@@ -38,49 +41,52 @@ val sourceJar = tasks.register("sourceJar", Jar::class.java) {
     from(main.java.srcDirs + main.groovy.srcDirs)
 }
 
-configureUploadArchivesTask(generatePom)
-
 artifacts {
 
     fun publishRuntime(artifact: Any) =
-        add(generatePom.get().publishRuntime.name, artifact) // TODO: This prevent `generatePom` from being lazy
+        add(publishRuntime.name, artifact)
 
     publishRuntime(tasks.named("jar").get()) // TODO: LazyPublishArtifact has custom provider unpacking, see https://github.com/gradle/gradle-native/issues/719
     publishRuntime(sourceJar.get()) // TODO: LazyPublishArtifact has custom provider unpacking, see https://github.com/gradle/gradle-native/issues/719
-    publishRuntime(
-        DefaultPublishArtifact(
-            base.archivesBaseName,
-            "pom",
-            "pom",
-            null,
-            Date(),
-            generatePom.get().pomFile,
-            generatePom))
 }
 
-fun Project.configureUploadArchivesTask(generatePom: TaskProvider<GeneratePom>) {
-    // TODO: Make this lazy, see https://github.com/gradle/gradle-native/issues/718
-    tasks.getByName<Upload>("uploadArchives") {
-        // TODO Add magic property to upcoming configuration interface
-        onlyIf { !project.hasProperty("noUpload") }
-        configuration = generatePom.get().publishRuntime
-        dependsOn(generatePom)
-        isUploadDescriptor = false
+// TODO: Make this lazy, see https://github.com/gradle/gradle-native/issues/718
+tasks.getByName<Upload>("uploadArchives") {
+    // TODO Add magic property to upcoming configuration interface
+    onlyIf { !project.hasProperty("noUpload") }
+    configuration = publishRuntime
+    isUploadDescriptor = true
 
-        // TODO Remove once task configuration on demand is available and we can enforce properties at task configuration time
-        failEarlyIfCredentialsAreNotSet(this)
+    // TODO Remove once task configuration on demand is available and we can enforce properties at task configuration time
+    failEarlyIfCredentialsAreNotSet(this)
 
-        repositories {
-            ivy {
-                artifactPattern(createArtifactPattern(rootProject.extra["isSnapshot"] as Boolean, project.group.toString(), base.archivesBaseName))
-                credentials {
-                    username = artifactoryUserName
-                    password = artifactoryUserPassword
-                }
+    repositories {
+        ivy {
+            artifactPattern(createArtifactPattern(rootProject.extra["isSnapshot"] as Boolean, project.group.toString(), base.archivesBaseName))
+            credentials {
+                username = artifactoryUserName
+                password = artifactoryUserPassword
             }
         }
     }
 }
+
+
+afterEvaluate {
+    maven.conf2ScopeMappings.apply {
+        mappings.clear()
+        addMapping(300, publishRuntime, Conf2ScopeMappingContainer.RUNTIME)
+    }
+    dependencies {
+        publishImplementation.allDependencies.withType<ProjectDependency>().forEach {
+            publishRuntime("org.gradle:${it.dependencyProject.base.archivesBaseName}:$version")
+        }
+        publishImplementation.allDependencies.withType<ExternalDependency>().forEach {
+            publishRuntime(it)
+        }
+    }
+}
+
 
 fun Project.failEarlyIfCredentialsAreNotSet(upload: Upload) {
     gradle.taskGraph.whenReady({
