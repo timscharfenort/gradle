@@ -20,8 +20,11 @@ import org.gradle.api.file.ConfigurableFileTree;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.tasks.TaskValidationContext;
 import org.gradle.internal.typeconversion.UnsupportedNotationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.util.Map;
 
 public enum ValidationActions implements ValidationAction {
@@ -35,7 +38,11 @@ public enum ValidationActions implements ValidationAction {
         public void doValidate(String propertyName, Object value, TaskValidationContext context) {
             File file = toFile(context, value);
             if (!file.exists()) {
-                context.visitError(String.format("File '%s' specified for property '%s' does not exist.", file, propertyName));
+                if (Files.isSymbolicLink(file.toPath())) {
+                    LOGGER.warn("File '{}' specified for property '{}' is a broken symbolic link.", file, propertyName);
+                } else {
+                    context.visitError(String.format("File '%s' specified for property '%s' does not exist.", file, propertyName));
+                }
             } else if (!file.isFile()) {
                 context.visitError(String.format("File '%s' specified for property '%s' is not a file.", file, propertyName));
             }
@@ -46,7 +53,11 @@ public enum ValidationActions implements ValidationAction {
         public void doValidate(String propertyName, Object value, TaskValidationContext context) {
             File directory = toDirectory(context, value);
             if (!directory.exists()) {
-                context.visitError(String.format("Directory '%s' specified for property '%s' does not exist.", directory, propertyName));
+                if (Files.isSymbolicLink(directory.toPath())) {
+                    LOGGER.warn("Directory '{}' specified for property '{}' is a broken symbolic link.", directory, propertyName);
+                } else {
+                    context.visitError(String.format("Directory '%s' specified for property '%s' does not exist.", directory, propertyName));
+                }
             } else if (!directory.isDirectory()) {
                 context.visitError(String.format("Directory '%s' specified for property '%s' is not a directory.", directory, propertyName));
             }
@@ -107,6 +118,8 @@ public enum ValidationActions implements ValidationAction {
             }
         }
     };
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ValidationActions.class);
 
     private static void validateNotInReservedFileSystemLocation(TaskValidationContext context, File location) {
         if (context.isInReservedFileSystemLocation(location)) {

@@ -89,7 +89,7 @@ class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
         """
 
         when:
-        run 'resolveSymlink' // FIXME: 'link' specified for property 'linkInput' does not exist.
+        run 'resolveSymlink'
         then:
         noneSkipped()
         outputContains 'broken symbolic link'
