@@ -22,6 +22,7 @@ import spock.lang.Unroll
 
 import static org.gradle.util.TextUtil.escapeString
 
+@Unroll
 @Requires(TestPrecondition.SYMLINKS)
 class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
 
@@ -63,6 +64,59 @@ class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
         "project.layout.files()"             | "project.layout.files(file, symlink, symlinked)"
         "project.layout.configurableFiles()" | "project.layout.configurableFiles(file, symlink, symlinked)"
         "project.objects.fileCollection()"   | "project.objects.fileCollection().from(file, symlink, symlinked)"
+    }
+
+    // TODO should probably be moved to incremental suite
+    def "task with broken input #fileType symlink doesn't fail"() {
+        def target = file('target')
+        def link = file('link').createLink(target)
+        def output = file('output')
+
+        buildFile << """
+            class SymlinkedTask extends DefaultTask {
+                @Incremental ${inputAnnotation} File linkInput
+                @OutputFile File output
+            
+                @TaskAction execute(InputChanges inputChanges) {
+                    output.text = inputChanges.allFileChanges.toList()
+                }
+            }   
+            
+            task resolveSymlink(type: SymlinkedTask) {
+                linkInput = file("${escapeString(link)}")
+                output = file("${escapeString(output)}")
+            }
+        """
+
+        when:
+        run 'resolveSymlink' // FIXME: 'link' specified for property 'linkInput' does not exist.
+        then:
+        noneSkipped()
+        outputContains 'broken symbolic link'
+        output.text.contains "${link.name} added for rebuild"
+        when:
+        run 'resolveSymlink'
+        then:
+        allSkipped()
+
+        when:
+        create(target)
+        run 'resolveSymlink'
+        then:
+        noneSkipped()
+        output.text.contains "${link.name} has been added"
+
+        when:
+        delete(target)
+        run 'resolveSymlink'
+        then:
+        noneSkipped()
+        output.text.contains "${link.name} has been removed"
+
+        where:
+        fileType    | inputAnnotation   | create              | delete
+        'file'      | '@InputFile'      | { it.createFile() } | { it.delete() }
+        // TODO 'directory' | '@InputDirectory' | { it.mkdirs() }     | { it.deleteDir() }
     }
 
     void maybeDeprecated(String expression) {
