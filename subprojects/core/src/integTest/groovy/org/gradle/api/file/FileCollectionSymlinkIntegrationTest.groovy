@@ -26,8 +26,7 @@ import static org.gradle.util.TextUtil.escapeString
 @Requires(TestPrecondition.SYMLINKS)
 class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
 
-    @Unroll("#desc can handle symlinks")
-    def "file collection can handle symlinks"() {
+    def "#desc can handle symlinks"() {
         def buildScript = file("build.gradle")
         def baseDir = file('build')
         baseDir.file('file').text = 'some contents'
@@ -93,7 +92,6 @@ class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
         then:
         noneSkipped()
         outputContains 'broken symbolic link'
-        output.text.contains "${link.name} added for rebuild"
         when:
         run 'resolveSymlink'
         then:
@@ -116,7 +114,7 @@ class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
         where:
         fileType    | inputAnnotation   | create              | delete
         'file'      | '@InputFile'      | { it.createFile() } | { it.delete() }
-        // TODO 'directory' | '@InputDirectory' | { it.mkdirs() }     | { it.deleteDir() }
+        'directory' | '@InputDirectory' | { it.mkdirs() }     | { it.deleteDir() }
     }
 
     void maybeDeprecated(String expression) {
