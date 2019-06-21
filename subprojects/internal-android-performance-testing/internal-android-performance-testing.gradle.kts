@@ -29,12 +29,12 @@ application {
 tasks.register<BuildClassPath>("buildClassPath") {
     val jar: Jar by tasks
     dependsOn(jar)
-    classpath = androidTools + files(jar.archivePath)
+    classpath = androidTools + files(jar.archiveFile)
     outputFile = buildDir.resolve("classpath.txt")
 }
 
 listOf(tasks.distZip, tasks.distTar).forEach {
-    it { baseName = "android-test-app" }
+    it.configure { archiveBaseName.set("android-test-app") }
 }
 
 project(":distributions").tasks.register("buildDists") {
