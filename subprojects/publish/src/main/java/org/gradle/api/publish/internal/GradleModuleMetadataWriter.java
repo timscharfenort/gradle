@@ -147,6 +147,10 @@ public class GradleModuleMetadataWriter {
             preferred = null;
         }
 
+        if (versionConstraint.isStrong()) {
+            jsonWriter.name("strong");
+            jsonWriter.value(true);
+        }
         // For now, 'requires' implies 'prefers', and 'strictly' implies 'requires'
         // Only publish the defining constraint.
         if (!versionConstraint.getStrictVersion().isEmpty()) {

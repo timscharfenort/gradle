@@ -63,7 +63,8 @@ public class ModuleComponentSelectorSerializer implements Serializer<ModuleCompo
         for (int i = 0; i < cpt; i++) {
             rejects.add(decoder.readString());
         }
-        return new DefaultImmutableVersionConstraint(preferred, required, strictly, rejects);
+        boolean appliesTransitively = decoder.readBoolean();
+        return new DefaultImmutableVersionConstraint(preferred, required, strictly, rejects, appliesTransitively);
     }
 
     @Override
@@ -92,6 +93,7 @@ public class ModuleComponentSelectorSerializer implements Serializer<ModuleCompo
         for (String rejectedVersion : rejectedVersions) {
             encoder.writeString(rejectedVersion);
         }
+        encoder.writeBoolean(cst.isStrong());
     }
 
     private ImmutableAttributes readAttributes(Decoder decoder) throws IOException {

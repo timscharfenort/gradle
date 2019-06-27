@@ -137,4 +137,12 @@ public interface VersionConstraint extends Describable {
      * @return the list of rejected versions
      */
     List<String> getRejectedVersions();
+
+    /**
+     * The version constraint wins over other transitively brought in constraints on the same module.
+     *
+     * @since 5.6
+     */
+    @Incubating
+    boolean isStrong();
 }

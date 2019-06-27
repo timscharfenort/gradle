@@ -132,19 +132,19 @@ class GradleModuleMetadataParserTest extends Specification {
     }
 
     VersionConstraint prefers(String version) {
-        DefaultImmutableVersionConstraint.of(version, '', '', [])
+        DefaultImmutableVersionConstraint.of(version, '', '', [], false)
     }
 
     VersionConstraint strictly(String version) {
-        DefaultImmutableVersionConstraint.of('', '', version, [])
+        DefaultImmutableVersionConstraint.of('', '', version, [], false)
     }
 
     VersionConstraint prefersAndStrictly(String prefers, String strictly) {
-        DefaultImmutableVersionConstraint.of(prefers, '', strictly, [])
+        DefaultImmutableVersionConstraint.of(prefers, '', strictly, [], false)
     }
 
     VersionConstraint prefersAndRejects(String version, List<String> rejects) {
-        DefaultImmutableVersionConstraint.of(version, version, "", rejects)
+        DefaultImmutableVersionConstraint.of(version, version, "", rejects, false)
     }
 
     List<Exclude> excludes(String... input) {

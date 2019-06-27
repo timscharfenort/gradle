@@ -34,21 +34,24 @@ public class DefaultImmutableVersionConstraint extends AbstractVersionConstraint
     private final ImmutableList<String> rejectedVersions;
     @Nullable
     private final String requiredBranch;
+    private final boolean strong;
 
     private final int hashCode;
 
     public DefaultImmutableVersionConstraint(String preferredVersion,
                                              String requiredVersion,
                                              String strictVersion,
-                                             List<String> rejectedVersions) {
-        this(preferredVersion, requiredVersion, strictVersion, rejectedVersions, null);
+                                             List<String> rejectedVersions,
+                                             boolean strong) {
+        this(preferredVersion, requiredVersion, strictVersion, rejectedVersions, null, strong);
     }
 
     public DefaultImmutableVersionConstraint(String preferredVersion,
                                              String requiredVersion,
                                              String strictVersion,
                                              List<String> rejectedVersions,
-                                             @Nullable String requiredBranch) {
+                                             @Nullable String requiredBranch,
+                                             boolean strong) {
         if (preferredVersion == null) {
             throw new IllegalArgumentException("Preferred version must not be null");
         }
@@ -71,6 +74,7 @@ public class DefaultImmutableVersionConstraint extends AbstractVersionConstraint
         this.strictVersion = strictVersion;
         this.rejectedVersions = ImmutableList.copyOf(rejectedVersions);
         this.requiredBranch = requiredBranch;
+        this.strong = strong;
         this.hashCode = super.hashCode();
     }
 
@@ -83,6 +87,7 @@ public class DefaultImmutableVersionConstraint extends AbstractVersionConstraint
         this.strictVersion = "";
         this.rejectedVersions = ImmutableList.of();
         this.requiredBranch = null;
+        this.strong = false;
         this.hashCode = super.hashCode();
     }
 
@@ -117,11 +122,16 @@ public class DefaultImmutableVersionConstraint extends AbstractVersionConstraint
         return rejectedVersions;
     }
 
+    @Override
+    public boolean isStrong() {
+        return strong;
+    }
+
     public static ImmutableVersionConstraint of(VersionConstraint versionConstraint) {
         if (versionConstraint instanceof ImmutableVersionConstraint) {
             return (ImmutableVersionConstraint) versionConstraint;
         }
-        return new DefaultImmutableVersionConstraint(versionConstraint.getPreferredVersion(), versionConstraint.getRequiredVersion(), versionConstraint.getStrictVersion(), versionConstraint.getRejectedVersions());
+        return new DefaultImmutableVersionConstraint(versionConstraint.getPreferredVersion(), versionConstraint.getRequiredVersion(), versionConstraint.getStrictVersion(), versionConstraint.getRejectedVersions(), versionConstraint.isStrong());
     }
 
     public static ImmutableVersionConstraint of(String version) {
@@ -131,8 +141,8 @@ public class DefaultImmutableVersionConstraint extends AbstractVersionConstraint
         return new DefaultImmutableVersionConstraint(version);
     }
 
-    public static ImmutableVersionConstraint of(String preferredVersion, String requiredVersion, String strictVersion, List<String> rejects) {
-        return new DefaultImmutableVersionConstraint(preferredVersion, requiredVersion, strictVersion, rejects);
+    public static ImmutableVersionConstraint of(String preferredVersion, String requiredVersion, String strictVersion, List<String> rejects, boolean appliesTransitively) {
+        return new DefaultImmutableVersionConstraint(preferredVersion, requiredVersion, strictVersion, rejects, appliesTransitively);
     }
 
     public static ImmutableVersionConstraint of() {

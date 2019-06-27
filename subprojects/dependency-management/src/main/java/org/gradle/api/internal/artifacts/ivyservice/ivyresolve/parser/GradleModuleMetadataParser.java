@@ -392,6 +392,7 @@ public class GradleModuleMetadataParser {
         String preferredVersion = "";
         String strictVersion = "";
         List<String> rejects = Lists.newArrayList();
+        boolean strong = false;
 
         reader.beginObject();
         while (reader.peek() != END_OBJECT) {
@@ -414,14 +415,16 @@ public class GradleModuleMetadataParser {
                     }
                     reader.endArray();
                     break;
+                case "strong":
+                    strong = reader.nextBoolean();
+                    break;
                 default:
                     consumeAny(reader);
                     break;
             }
         }
         reader.endObject();
-
-        return DefaultImmutableVersionConstraint.of(preferredVersion, requiredVersion, strictVersion, rejects);
+        return DefaultImmutableVersionConstraint.of(preferredVersion, requiredVersion, strictVersion, rejects, strong);
     }
 
     private ImmutableList<ExcludeMetadata> consumeExcludes(JsonReader reader) throws IOException {

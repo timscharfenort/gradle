@@ -101,7 +101,8 @@ public class ComponentSelectorSerializer extends AbstractSerializer<ComponentSel
         for (int i = 0; i < rejectCount; i++) {
             rejects.add(decoder.readString());
         }
-        return new DefaultImmutableVersionConstraint(prefers, requires, strictly, rejects);
+        boolean strong = decoder.readBoolean();
+        return new DefaultImmutableVersionConstraint(prefers, requires, strictly, rejects, strong);
     }
 
     private List<Capability> readCapabilities(Decoder decoder) throws IOException {
@@ -191,6 +192,7 @@ public class ComponentSelectorSerializer extends AbstractSerializer<ComponentSel
         for (String rejectedVersion : rejectedVersions) {
             encoder.writeString(rejectedVersion);
         }
+        encoder.writeBoolean(versionConstraint.isStrong());
     }
 
     private ComponentSelectorSerializer.Implementation resolveImplementation(ComponentSelector value) {
