@@ -240,7 +240,7 @@ public class DependencyGraphBuilder {
         performSelectionSerially(dependencies, resolveState);
         maybeDownloadMetadataInParallel(node, componentIdentifierCache, dependencies);
         attachToTargetRevisionsSerially(dependencies);
-
+        node.linkChildrenSelectorOverrides(dependencies);
     }
 
     private void performSelectionSerially(List<EdgeState> dependencies, ResolveState resolveState) {

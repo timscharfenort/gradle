@@ -43,14 +43,14 @@ class PotentialEdge {
         this.component = component;
     }
 
-    static PotentialEdge of(ResolveState resolveState, NodeState from, ModuleComponentIdentifier toComponent, ModuleComponentSelector toSelector, ComponentIdentifier owner) {
-        return of(resolveState, from, toComponent, toSelector, owner, false, true);
+    static PotentialEdge of(ResolveState resolveState, NodeState from, ModuleComponentIdentifier toComponent, ModuleComponentSelector toSelector, ComponentIdentifier owner, SelectorOverrides selectorOverrides) {
+        return of(resolveState, from, toComponent, toSelector, owner, false, true, selectorOverrides);
     }
 
-    static PotentialEdge of(ResolveState resolveState, NodeState from, ModuleComponentIdentifier toComponent, ModuleComponentSelector toSelector, ComponentIdentifier owner, boolean force, boolean transitive) {
+    static PotentialEdge of(ResolveState resolveState, NodeState from, ModuleComponentIdentifier toComponent, ModuleComponentSelector toSelector, ComponentIdentifier owner, boolean force, boolean transitive, SelectorOverrides selectorOverrides) {
         DependencyState dependencyState = new DependencyState(new LenientPlatformDependencyMetadata(resolveState, from, toSelector, toComponent, owner, force || isForce(from), transitive), resolveState.getComponentSelectorConverter());
         dependencyState = NodeState.maybeSubstitute(dependencyState, resolveState.getDependencySubstitutionApplicator());
-        EdgeState edge = new EdgeState(from, dependencyState, from.previousTraversalExclusions, resolveState);
+        EdgeState edge = new EdgeState(from, dependencyState, from.previousTraversalExclusions, resolveState, selectorOverrides);
         ModuleVersionIdentifier toModuleVersionId = DefaultModuleVersionIdentifier.newId(toSelector.getModuleIdentifier(), toSelector.getVersion());
         ComponentState version = resolveState.getModule(toSelector.getModuleIdentifier()).getVersion(toModuleVersionId, toComponent);
         SelectorState selector = edge.getSelector();

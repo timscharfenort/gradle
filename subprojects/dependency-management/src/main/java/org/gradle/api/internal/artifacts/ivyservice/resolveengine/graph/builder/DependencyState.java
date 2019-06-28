@@ -46,6 +46,10 @@ class DependencyState {
         this(dependency, dependency.getSelector(), null, componentSelectorConverter);
     }
 
+    DependencyState(DependencyMetadata dependency, DependencyState original) {
+        this(dependency, original.getRequested(), original.ruleDescriptors, original.componentSelectorConverter);
+    }
+
     private DependencyState(DependencyMetadata dependency, ComponentSelector requested, List<ComponentSelectionDescriptorInternal> ruleDescriptors, ComponentSelectorConverter componentSelectorConverter) {
         this.dependency = dependency;
         this.requested = requested;

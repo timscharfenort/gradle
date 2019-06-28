@@ -23,6 +23,7 @@ import org.gradle.api.artifacts.VersionConstraint;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ComponentSelector;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
+import org.gradle.api.artifacts.result.ComponentSelectionDescriptor;
 import org.gradle.api.internal.artifacts.ComponentSelectorConverter;
 import org.gradle.api.internal.artifacts.ResolvedConfigurationIdentifier;
 import org.gradle.api.internal.artifacts.ResolvedVersionConstraint;
@@ -151,16 +152,26 @@ class ResolveState implements ComponentStateFactory<ComponentState> {
         return nodes.size();
     }
 
-    public NodeState getNode(ComponentState module, ConfigurationMetadata configurationMetadata) {
+    public NodeState getNode(ComponentState module, ConfigurationMetadata configurationMetadata, SelectorOverrides selectorOverrides) {
         ResolvedConfigurationIdentifier id = new ResolvedConfigurationIdentifier(module.getId(), configurationMetadata.getName());
-        return nodes.computeIfAbsent(id, rci -> new NodeState(idGenerator.generateId(), id, module, this, configurationMetadata));
+        NodeState nodeState = nodes.computeIfAbsent(id, rci -> new NodeState(idGenerator.generateId(), id, module, this, configurationMetadata));
+        nodeState.addSelectorOverridesParent(selectorOverrides);
+        return nodeState;
     }
 
     public Collection<SelectorState> getSelectors() {
         return selectors.values();
     }
 
-    public SelectorState getSelector(DependencyState dependencyState) {
+    public SelectorState getSelector(DependencyState definedDependencyState, SelectorOverrides selectorOverrides) {
+        DependencyState override = null;
+        if (selectorOverrides != null) {
+            DependencyMetadata dependencyMetadata = selectorOverrides.getOverride(definedDependencyState.getModuleIdentifier());
+            if (dependencyMetadata != null) {
+                override = new DependencyState(dependencyMetadata, definedDependencyState);
+            }
+        }
+        DependencyState dependencyState = override == null? definedDependencyState : override;
         SelectorState selectorState = selectors.computeIfAbsent(dependencyState.getRequested(), req -> {
             ModuleIdentifier moduleIdentifier = dependencyState.getModuleIdentifier();
             return new SelectorState(idGenerator.generateId(), dependencyState, idResolver, this, moduleIdentifier);

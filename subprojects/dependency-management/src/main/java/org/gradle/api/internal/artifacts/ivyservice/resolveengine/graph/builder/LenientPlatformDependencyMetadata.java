@@ -169,7 +169,7 @@ class LenientPlatformDependencyMetadata implements ModuleDependencyMetadata, For
                         }
                         if (!componentVersion.equals(target)) {
                             // We will only add dependencies to the leaves if there is such a published module
-                            PotentialEdge potentialEdge = PotentialEdge.of(resolveState, from, leafId, leafSelector, platformId, platformState.isForced(), false);
+                            PotentialEdge potentialEdge = PotentialEdge.of(resolveState, from, leafId, leafSelector, platformId, platformState.isForced(), false, null);
                             if (potentialEdge.metadata != null) {
                                 result = registerPlatformEdge(result, modules, leafId, leafSelector, platformId, platformState.isForced());
                                 break;

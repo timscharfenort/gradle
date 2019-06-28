@@ -24,7 +24,9 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import org.gradle.api.Action;
 import org.gradle.api.artifacts.ModuleIdentifier;
+import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
+import org.gradle.api.artifacts.component.ComponentSelector;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
 import org.gradle.api.capabilities.Capability;
@@ -73,6 +75,7 @@ public class NodeState implements DependencyGraphNode {
     private final boolean selectedByVariantAwareResolution;
     private final boolean dependenciesMayChange;
     private boolean doesNotHaveDependencies;
+    private final SelectorOverrides selectorOverrides;
 
     ExcludeSpec previousTraversalExclusions;
 
@@ -115,6 +118,11 @@ public class NodeState implements DependencyGraphNode {
         this.moduleExclusions = resolveState == null ? null : resolveState.getModuleExclusions(); // can be null in tests, ResolveState cannot be mocked
         this.dependenciesMayChange = component.getModule() != null && component.getModule().isVirtualPlatform(); // can be null in tests, ComponentState cannot be mocked
         component.addConfiguration(this);
+        this.selectorOverrides = discoverSelectorOverrides(id.getId(), md.getDependencies());
+    }
+
+    void addSelectorOverridesParent(SelectorOverrides parent) {
+        selectorOverrides.addParent(parent);
     }
 
     // the enqueue and dequeue methods are used for performance reasons
@@ -379,6 +387,34 @@ public class NodeState implements DependencyGraphNode {
         }
     }
 
+    private SelectorOverrides discoverSelectorOverrides(ModuleVersionIdentifier id, List<? extends DependencyMetadata> dependencies) {
+        SelectorOverrides localOverrides = new SelectorOverrides(id);
+        for (DependencyMetadata dependency : dependencies) {
+            ComponentSelector selector = dependency.getSelector();
+            if (selector instanceof ModuleComponentSelector) {
+                if (((ModuleComponentSelector) selector).getVersionConstraint().isStrong()) {
+                    localOverrides.put(((ModuleComponentSelector) selector).getModuleIdentifier(), dependency);
+                }
+            }
+        }
+        return localOverrides;
+    }
+
+    void linkChildrenSelectorOverrides(List<EdgeState> dependencies) {
+        for (EdgeState dependency : dependencies) {
+            SelectorState selector = dependency.getSelector();
+            ComponentState selected = selector.getTargetModule().getSelected();
+            if (selected != null) {
+                for (NodeState directChildNode: selected.getNodes()) {
+                    SelectorOverrides childOverride = directChildNode.selectorOverrides;
+                    if (childOverride != null) {
+                        selectorOverrides.addDirectChild(childOverride);
+                    }
+                }
+            }
+        }
+    }
+
     private void registerActivatingConstraint(DependencyState dependencyState) {
         if (potentiallyActivatedConstraints == null) {
             potentiallyActivatedConstraints = ArrayListMultimap.create();
@@ -436,7 +472,7 @@ public class NodeState implements DependencyGraphNode {
     }
 
     private void createAndLinkEdgeState(DependencyState dependencyState, Collection<EdgeState> discoveredEdges, ExcludeSpec resolutionFilter, boolean deferSelection) {
-        EdgeState dependencyEdge = edgesCache.computeIfAbsent(dependencyState, ds -> new EdgeState(this, ds, resolutionFilter, resolveState));
+        EdgeState dependencyEdge = edgesCache.computeIfAbsent(dependencyState, ds -> new EdgeState(this, ds, resolutionFilter, resolveState, selectorOverrides));
         dependencyEdge.getSelector().update(dependencyState);
         outgoingEdges.add(dependencyEdge);
         discoveredEdges.add(dependencyEdge);
@@ -489,7 +525,7 @@ public class NodeState implements DependencyGraphNode {
     }
 
     private void addPlatformEdges(Collection<EdgeState> discoveredEdges, ModuleComponentIdentifier platformComponentIdentifier, ModuleComponentSelector platformSelector) {
-        PotentialEdge potentialEdge = PotentialEdge.of(resolveState, this, platformComponentIdentifier, platformSelector, platformComponentIdentifier);
+        PotentialEdge potentialEdge = PotentialEdge.of(resolveState, this, platformComponentIdentifier, platformSelector, platformComponentIdentifier, selectorOverrides);
         ComponentResolveMetadata metadata = potentialEdge.metadata;
         VirtualPlatformState virtualPlatformState = null;
         if (metadata == null || metadata instanceof LenientPlatformResolveMetadata) {
