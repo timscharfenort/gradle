@@ -45,14 +45,14 @@ class FileCollectionFingerprintSerializerTest extends SerializerSpec {
 
         def rootHashes = ImmutableMultimap.of(
             "/1", MissingFileSnapshot.SIGNATURE,
-                "/2", HashCode.fromInt(5678),
-                "/3", HashCode.fromInt(1234))
+            "/2", HashCode.fromInt(5678),
+            "/3", HashCode.fromInt(1234))
         when:
         def out = serialize(new SerializableFileCollectionFingerprint(
-                '/1': new DefaultFileSystemLocationFingerprint("1", FileType.Directory, FileSystemLocationFingerprint.DIR_SIGNATURE),
-                '/2': IgnoredPathFileSystemLocationFingerprint.create(FileType.RegularFile, hash),
-                '/3': new DefaultFileSystemLocationFingerprint("/3", FileType.Missing, FileSystemLocationFingerprint.DIR_SIGNATURE),
-                rootHashes
+            '/1': new DefaultFileSystemLocationFingerprint("1", FileType.Directory, FileSystemLocationFingerprint.DIR_SIGNATURE),
+            '/2': IgnoredPathFileSystemLocationFingerprint.create(FileType.RegularFile, hash),
+            '/3': new DefaultFileSystemLocationFingerprint("/3", FileType.Missing, FileSystemLocationFingerprint.DIR_SIGNATURE),
+            rootHashes
         ), serializer)
 
         then:
@@ -78,13 +78,13 @@ class FileCollectionFingerprintSerializerTest extends SerializerSpec {
     def "should retain order in serialization"() {
         when:
         def out = serialize(new SerializableFileCollectionFingerprint(
-                "/3": new DefaultFileSystemLocationFingerprint('3', FileType.RegularFile, HashCode.fromInt(1234)),
-                "/2": new DefaultFileSystemLocationFingerprint('/2', FileType.RegularFile, HashCode.fromInt(5678)),
+            "/3": new DefaultFileSystemLocationFingerprint('3', FileType.RegularFile, HashCode.fromInt(1234)),
+            "/2": new DefaultFileSystemLocationFingerprint('/2', FileType.RegularFile, HashCode.fromInt(5678)),
             "/1": new DefaultFileSystemLocationFingerprint('1', FileType.Missing, MissingFileSnapshot.SIGNATURE),
-                ImmutableMultimap.of(
-                        "/3", HashCode.fromInt(1234),
-                        "/2", HashCode.fromInt(5678),
-                    "/1", MissingFileSnapshot.SIGNATURE)
+            ImmutableMultimap.of(
+                "/3", HashCode.fromInt(1234),
+                "/2", HashCode.fromInt(5678),
+                "/1", MissingFileSnapshot.SIGNATURE)
         ), serializer)
 
         then:

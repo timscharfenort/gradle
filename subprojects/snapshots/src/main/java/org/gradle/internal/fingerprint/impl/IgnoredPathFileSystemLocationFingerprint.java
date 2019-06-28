@@ -38,8 +38,6 @@ public class IgnoredPathFileSystemLocationFingerprint implements FileSystemLocat
                 return DIRECTORY;
             case Missing:
                 return MISSING_FILE;
-            case Unavailable:
-                return UNAVAILABLE_FILE;
             case RegularFile:
                 return new IgnoredPathFileSystemLocationFingerprint(FileType.RegularFile, contentHash);
             default:

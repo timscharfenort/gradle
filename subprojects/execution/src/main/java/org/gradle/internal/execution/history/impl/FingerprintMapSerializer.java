@@ -28,7 +28,6 @@ import org.gradle.internal.serialize.Decoder;
 import org.gradle.internal.serialize.Encoder;
 import org.gradle.internal.serialize.HashCodeSerializer;
 import org.gradle.internal.snapshot.MissingFileSnapshot;
-import org.gradle.internal.snapshot.UnavailableFileSnapshot;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -83,10 +82,9 @@ public class FingerprintMapSerializer extends AbstractSerializer<Map<String, Fil
                 return FileSystemLocationFingerprint.DIR_SIGNATURE;
             case Missing:
                 return MissingFileSnapshot.SIGNATURE;
-            case Unavailable:
-                return UnavailableFileSnapshot.SIGNATURE;
             case RegularFile:
                 return hashCodeSerializer.read(decoder);
+            case Unavailable:
             default:
                 throw new RuntimeException("Unable to read serialized file fingerprint. Unrecognized value found in the data stream.");
         }

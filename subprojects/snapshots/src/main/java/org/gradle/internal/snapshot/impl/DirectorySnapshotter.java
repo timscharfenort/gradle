@@ -196,24 +196,23 @@ public class DirectorySnapshotter {
                 if (attrs == null) {
                     throw new FileSnapshottingException(String.format("Cannot read file '%s': not authorized.", file));
                 }
-                FileSystemLocationSnapshot snapshot = getSnapshot(file, attrs, name);
-                builder.visit(snapshot);
+                builder.visit(snapshot(file, attrs, name));
             }
             return FileVisitResult.CONTINUE;
         }
 
-        private FileSystemLocationSnapshot getSnapshot(Path file, BasicFileAttributes attrs, String name) {
-            String absolutePath = intern(file.toString());
+        private FileSystemLocationSnapshot snapshot(Path absoluteFilePath, BasicFileAttributes attrs, String name) {
+            String internedAbsoluteFilePath = intern(absoluteFilePath.toString());
             if (attrs.isRegularFile()) {
                 try {
-                    HashCode hash = hasher.hash(file.toFile(), attrs.size(), attrs.lastModifiedTime().toMillis());
+                    HashCode hash = hasher.hash(absoluteFilePath.toFile(), attrs.size(), attrs.lastModifiedTime().toMillis());
                     FileMetadata metadata = FileMetadata.from(attrs);
-                    return new RegularFileSnapshot(absolutePath, name, hash, metadata);
+                    return new RegularFileSnapshot(internedAbsoluteFilePath, name, hash, metadata);
                 } catch (UncheckedIOException e) {
-                    LOGGER.debug("Could not read file path '{}'.", file, e);
+                    LOGGER.debug("Could not read file path '{}'.", absoluteFilePath, e);
                 }
             }
-            return new UnavailableFileSnapshot(absolutePath, name);
+            return new UnavailableFileSnapshot(internedAbsoluteFilePath, name);
         }
 
         @Override
@@ -252,6 +251,11 @@ public class DirectorySnapshotter {
             return stringInterner.intern(string);
         }
 
+        /**
+         * Returns whether we want to visit the given path during our walk, or ignore it completely,
+         * based on the directory/file excludes or the provided filtering predicate.
+         * Excludes won't mark this walk as `filtered`, only if the `predicate` rejects any entry.
+         **/
         private boolean isAllowed(Path path, String name, boolean isDirectory, @Nullable BasicFileAttributes attrs, Iterable<String> relativePath) {
             if (isDirectory) {
                 if (defaultExcludes.excludeDir(name)) {

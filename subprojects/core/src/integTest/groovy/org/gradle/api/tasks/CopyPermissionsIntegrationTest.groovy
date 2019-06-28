@@ -23,6 +23,8 @@ import org.gradle.util.TestPrecondition
 import spock.lang.Issue
 import spock.lang.Unroll
 
+import java.nio.file.Files
+
 import static org.junit.Assert.assertTrue
 
 @Unroll
@@ -232,7 +234,8 @@ class CopyPermissionsIntegrationTest extends AbstractIntegrationSpec {
 
         def outputDirectory = file("output")
         def unreadableOutput = create(file("${outputDirectory.name}/unreadable${type.capitalize()}"))
-            .with(true) { it.readable = false }
+        unreadableOutput.setReadable(false, false)
+        assert !Files.isReadable(unreadableOutput.toPath())
 
         buildFile << """
             task copy(type: Copy) {
