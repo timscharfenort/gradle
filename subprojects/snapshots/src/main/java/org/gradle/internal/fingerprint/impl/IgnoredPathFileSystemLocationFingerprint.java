@@ -20,11 +20,12 @@ import org.gradle.internal.file.FileType;
 import org.gradle.internal.fingerprint.FileSystemLocationFingerprint;
 import org.gradle.internal.hash.HashCode;
 import org.gradle.internal.hash.Hasher;
+import org.gradle.internal.snapshot.MissingFileSnapshot;
 
 public class IgnoredPathFileSystemLocationFingerprint implements FileSystemLocationFingerprint {
 
     public static final IgnoredPathFileSystemLocationFingerprint DIRECTORY = new IgnoredPathFileSystemLocationFingerprint(FileType.Directory, DIR_SIGNATURE);
-    private static final IgnoredPathFileSystemLocationFingerprint MISSING_FILE = new IgnoredPathFileSystemLocationFingerprint(FileType.Missing, MISSING_FILE_SIGNATURE);
+    private static final IgnoredPathFileSystemLocationFingerprint MISSING_FILE = new IgnoredPathFileSystemLocationFingerprint(FileType.Missing, MissingFileSnapshot.SIGNATURE);
 
     private final FileType type;
     private final HashCode normalizedContentHash;

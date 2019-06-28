@@ -25,6 +25,7 @@ import org.gradle.internal.fingerprint.impl.DefaultFileSystemLocationFingerprint
 import org.gradle.internal.fingerprint.impl.IgnoredPathFileSystemLocationFingerprint
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.serialize.SerializerSpec
+import org.gradle.internal.snapshot.MissingFileSnapshot
 
 class FileCollectionFingerprintSerializerTest extends SerializerSpec {
 
@@ -43,7 +44,7 @@ class FileCollectionFingerprintSerializerTest extends SerializerSpec {
         def hash = HashCode.fromInt(1234)
 
         def rootHashes = ImmutableMultimap.of(
-                "/1", FileSystemLocationFingerprint.MISSING_FILE_SIGNATURE,
+            "/1", MissingFileSnapshot.SIGNATURE,
                 "/2", HashCode.fromInt(5678),
                 "/3", HashCode.fromInt(1234))
         when:
@@ -69,7 +70,7 @@ class FileCollectionFingerprintSerializerTest extends SerializerSpec {
         out.fingerprints['/3'].with {
             type == FileType.Missing
             normalizedPath == "/3"
-            normalizedContentHash == FileSystemLocationFingerprint.MISSING_FILE_SIGNATURE
+            normalizedContentHash == MissingFileSnapshot.SIGNATURE
         }
         out.rootHashes == rootHashes
     }
@@ -79,11 +80,11 @@ class FileCollectionFingerprintSerializerTest extends SerializerSpec {
         def out = serialize(new SerializableFileCollectionFingerprint(
                 "/3": new DefaultFileSystemLocationFingerprint('3', FileType.RegularFile, HashCode.fromInt(1234)),
                 "/2": new DefaultFileSystemLocationFingerprint('/2', FileType.RegularFile, HashCode.fromInt(5678)),
-                "/1": new DefaultFileSystemLocationFingerprint('1', FileType.Missing, FileSystemLocationFingerprint.MISSING_FILE_SIGNATURE),
+            "/1": new DefaultFileSystemLocationFingerprint('1', FileType.Missing, MissingFileSnapshot.SIGNATURE),
                 ImmutableMultimap.of(
                         "/3", HashCode.fromInt(1234),
                         "/2", HashCode.fromInt(5678),
-                        "/1", FileSystemLocationFingerprint.MISSING_FILE_SIGNATURE)
+                    "/1", MissingFileSnapshot.SIGNATURE)
         ), serializer)
 
         then:

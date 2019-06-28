@@ -27,6 +27,7 @@ import org.gradle.internal.serialize.AbstractSerializer;
 import org.gradle.internal.serialize.Decoder;
 import org.gradle.internal.serialize.Encoder;
 import org.gradle.internal.serialize.HashCodeSerializer;
+import org.gradle.internal.snapshot.MissingFileSnapshot;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -80,7 +81,7 @@ public class FingerprintMapSerializer extends AbstractSerializer<Map<String, Fil
             case Directory:
                 return FileSystemLocationFingerprint.DIR_SIGNATURE;
             case Missing:
-                return FileSystemLocationFingerprint.MISSING_FILE_SIGNATURE;
+                return MissingFileSnapshot.SIGNATURE;
             case RegularFile:
                 return hashCodeSerializer.read(decoder);
             default:

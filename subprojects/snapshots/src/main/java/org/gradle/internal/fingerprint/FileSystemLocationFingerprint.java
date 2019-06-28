@@ -31,7 +31,6 @@ import org.gradle.internal.hash.Hashing;
  */
 public interface FileSystemLocationFingerprint extends Comparable<FileSystemLocationFingerprint>, Hashable {
     HashCode DIR_SIGNATURE = Hashing.signature("DIR");
-    HashCode MISSING_FILE_SIGNATURE = Hashing.signature("MISSING");
 
     String getNormalizedPath();
     HashCode getNormalizedContentHash();
