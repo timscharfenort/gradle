@@ -218,7 +218,7 @@ Groovy adds lots of useful methods to the standard Java classes. For example, `I
 include::sample[dir="userguide/tutorial/groovy",files="build.gradle[tags=groovyJdk]"]
 ====
 
-Have a look at http://groovy-lang.org/gdk.html[] for more details.
+Have a look at https://groovy-lang.org/gdk.html[] for more details.
 
 [[sec:property_accessors]]
 === Property accessors
