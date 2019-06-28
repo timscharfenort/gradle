@@ -21,11 +21,13 @@ import org.gradle.internal.fingerprint.FileSystemLocationFingerprint;
 import org.gradle.internal.hash.HashCode;
 import org.gradle.internal.hash.Hasher;
 import org.gradle.internal.snapshot.MissingFileSnapshot;
+import org.gradle.internal.snapshot.UnavailableFileSnapshot;
 
 public class IgnoredPathFileSystemLocationFingerprint implements FileSystemLocationFingerprint {
 
     public static final IgnoredPathFileSystemLocationFingerprint DIRECTORY = new IgnoredPathFileSystemLocationFingerprint(FileType.Directory, DIR_SIGNATURE);
     private static final IgnoredPathFileSystemLocationFingerprint MISSING_FILE = new IgnoredPathFileSystemLocationFingerprint(FileType.Missing, MissingFileSnapshot.SIGNATURE);
+    private static final IgnoredPathFileSystemLocationFingerprint UNAVAILABLE_FILE = new IgnoredPathFileSystemLocationFingerprint(FileType.Unavailable, UnavailableFileSnapshot.SIGNATURE);
 
     private final FileType type;
     private final HashCode normalizedContentHash;
@@ -36,6 +38,8 @@ public class IgnoredPathFileSystemLocationFingerprint implements FileSystemLocat
                 return DIRECTORY;
             case Missing:
                 return MISSING_FILE;
+            case Unavailable:
+                return UNAVAILABLE_FILE;
             case RegularFile:
                 return new IgnoredPathFileSystemLocationFingerprint(FileType.RegularFile, contentHash);
             default:

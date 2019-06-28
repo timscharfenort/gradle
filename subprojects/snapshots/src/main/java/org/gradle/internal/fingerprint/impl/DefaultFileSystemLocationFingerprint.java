@@ -22,6 +22,7 @@ import org.gradle.internal.hash.HashCode;
 import org.gradle.internal.hash.Hasher;
 import org.gradle.internal.snapshot.FileSystemLocationSnapshot;
 import org.gradle.internal.snapshot.MissingFileSnapshot;
+import org.gradle.internal.snapshot.UnavailableFileSnapshot;
 
 public class DefaultFileSystemLocationFingerprint implements FileSystemLocationFingerprint {
     private final HashCode normalizedContentHash;
@@ -42,6 +43,8 @@ public class DefaultFileSystemLocationFingerprint implements FileSystemLocationF
                 return DIR_SIGNATURE;
             case Missing:
                 return MissingFileSnapshot.SIGNATURE;
+            case Unavailable:
+                return UnavailableFileSnapshot.SIGNATURE;
             case RegularFile:
                 return hash;
             default:
@@ -61,6 +64,8 @@ public class DefaultFileSystemLocationFingerprint implements FileSystemLocationF
             return FileType.Directory;
         } else if (normalizedContentHash == MissingFileSnapshot.SIGNATURE) {
             return FileType.Missing;
+        } else if (normalizedContentHash == UnavailableFileSnapshot.SIGNATURE) {
+            return FileType.Unavailable;
         } else {
             return FileType.RegularFile;
         }
