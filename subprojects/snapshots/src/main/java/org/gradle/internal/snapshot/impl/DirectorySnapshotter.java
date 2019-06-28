@@ -17,7 +17,6 @@
 package org.gradle.internal.snapshot.impl;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Lists;
@@ -200,9 +199,17 @@ public class DirectorySnapshotter {
                     // when FileVisitOption.FOLLOW_LINKS, we only get here when link couldn't be followed
                     throw new FileSnapshottingException(String.format("Could not list contents of '%s'. Couldn't follow symbolic link.", file));
                 }
-                addFileSnapshot(file, name, attrs);
+                FileSystemLocationSnapshot snapshot = getSnapshot(file, attrs, name);
+                builder.visit(snapshot);
             }
             return FileVisitResult.CONTINUE;
+        }
+
+        private FileSystemLocationSnapshot getSnapshot(Path file, BasicFileAttributes attrs, String name) {
+            String absolutePath = intern(file.toString());
+            HashCode hash = hasher.hash(file.toFile(), attrs.size(), attrs.lastModifiedTime().toMillis());
+            FileMetadata metadata = FileMetadata.from(attrs);
+            return new RegularFileSnapshot(absolutePath, name, hash, metadata);
         }
 
         @Override
@@ -210,8 +217,10 @@ public class DirectorySnapshotter {
             // File loop exceptions are ignored. When we encounter a loop (via symbolic links), we continue
             // so we include all the other files apart from the loop.
             // This way, we include each file only once.
-            if (isNotFileSystemLoopException(exc) && isAllowed(file, file.getFileName().toString(), false, null, builder.getRelativePath())) {
-                throw new UncheckedIOException(String.format("Could not read path '%s'.", file), exc);
+            if (isNotFileSystemLoopException(exc)) {
+                if (isAllowed(file, file.getFileName().toString(), false, null, builder.getRelativePath())) {
+                    throw new UncheckedIOException(String.format("Could not read path '%s'.", file), exc);
+                }
             }
             return FileVisitResult.CONTINUE;
         }
@@ -230,13 +239,6 @@ public class DirectorySnapshotter {
 
         private boolean isNotFileSystemLoopException(@Nullable IOException e) {
             return e != null && !(e instanceof FileSystemLoopException);
-        }
-
-        private void addFileSnapshot(Path file, String name, BasicFileAttributes attrs) {
-            Preconditions.checkNotNull(attrs, "Unauthorized access to %", file);
-            HashCode hash = hasher.hash(file.toFile(), attrs.size(), attrs.lastModifiedTime().toMillis());
-            RegularFileSnapshot fileSnapshot = new RegularFileSnapshot(intern(file.toString()), name, hash, FileMetadata.from(attrs));
-            builder.visit(fileSnapshot);
         }
 
         private String intern(String string) {
